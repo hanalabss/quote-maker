@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { FileText, ClipboardList, LogOut } from "lucide-react";
+import { FileText, ClipboardList, LogOut, DollarSign } from "lucide-react";
 
 interface AuthUser {
   id: string;
@@ -69,7 +69,7 @@ export default function HomePage() {
           <p className="text-lg text-gray-500">하나플랫폼 견적서 자동화 시스템</p>
         </div>
 
-        <div className="grid md:grid-cols-2 gap-6">
+        <div className="grid md:grid-cols-3 gap-6">
           <Link
             href="/request"
             className="group block p-8 bg-white rounded-2xl shadow-sm border border-gray-200 hover:shadow-md hover:border-blue-300 transition-all"
@@ -97,6 +97,23 @@ export default function HomePage() {
               {isDev
                 ? "견적 요청을 검토하고 승인/수정합니다"
                 : "내가 신청한 견적서의 상태를 확인합니다"}
+            </p>
+          </Link>
+
+          <Link
+            href="/dashboard/modules"
+            className="group block p-8 bg-white rounded-2xl shadow-sm border border-gray-200 hover:shadow-md hover:border-emerald-300 transition-all"
+          >
+            <div className="w-12 h-12 bg-emerald-100 rounded-xl flex items-center justify-center mb-4 group-hover:bg-emerald-200 transition-colors">
+              <DollarSign className="w-6 h-6 text-emerald-600" />
+            </div>
+            <h2 className="text-xl font-semibold mb-2">
+              {isDev ? "단가표 관리" : "단가표 보기"}
+            </h2>
+            <p className="text-gray-500">
+              {isDev
+                ? "모듈 단가를 확인하고 순서를 관리합니다"
+                : "모듈별 기본 단가를 확인합니다"}
             </p>
           </Link>
         </div>

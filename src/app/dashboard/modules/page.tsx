@@ -45,6 +45,38 @@ const CATEGORY_LABELS: Record<string, string> = {
   etc: "기타",
 };
 
+function ReadOnlyRow({ mod, index }: { mod: Module; index: number }) {
+  return (
+    <tr className="hover:bg-gray-50">
+      <td className="px-4 py-3 text-sm text-gray-400 w-12">{index + 1}</td>
+      <td className="px-4 py-3 text-sm font-mono text-gray-600">{mod.code}</td>
+      <td className="px-4 py-3">
+        <div className="text-sm font-medium">{mod.name}</div>
+        {mod.description && (
+          <div className="text-xs text-gray-500 mt-0.5">{mod.description}</div>
+        )}
+      </td>
+      <td className="px-4 py-3 text-sm text-gray-500 hidden md:table-cell">
+        {CATEGORY_LABELS[mod.category] || mod.category}
+      </td>
+      <td className="px-4 py-3 text-sm text-right font-medium">
+        {mod.basePrice === 0 && mod.code === "AI_STYLE" ? (
+          <span className="text-orange-600">협의</span>
+        ) : (
+          `${formatKRW(mod.basePrice)}원`
+        )}
+      </td>
+      <td className="px-4 py-3 text-center">
+        {mod.isAutoIncluded && (
+          <span className="inline-block px-2 py-0.5 bg-green-100 text-green-700 text-xs rounded-full">
+            자동
+          </span>
+        )}
+      </td>
+    </tr>
+  );
+}
+
 function SortableRow({ mod, index }: { mod: Module; index: number }) {
   const {
     attributes,
@@ -111,6 +143,7 @@ export default function ModulesPage() {
   const [modules, setModules] = useState<Module[]>([]);
   const [originalOrder, setOriginalOrder] = useState<string[]>([]);
   const [authorized, setAuthorized] = useState(false);
+  const [isDev, setIsDev] = useState(false);
   const [saving, setSaving] = useState(false);
 
   const sensors = useSensors(
@@ -122,11 +155,12 @@ export default function ModulesPage() {
     fetch("/api/auth/me")
       .then((r) => (r.ok ? r.json() : null))
       .then((user) => {
-        if (!user || user.role !== "dev") {
-          router.replace("/dashboard/quotes");
+        if (!user) {
+          router.replace("/login");
           return;
         }
         setAuthorized(true);
+        setIsDev(user.role === "dev");
       });
 
     fetch("/api/modules")
@@ -179,34 +213,38 @@ export default function ModulesPage() {
     <div>
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-bold">모듈 가격 관리</h1>
+          <h1 className="text-2xl font-bold">{isDev ? "모듈 가격 관리" : "모듈 단가표"}</h1>
           <p className="text-sm text-gray-500 mt-1">
-            드래그하여 순서를 변경할 수 있습니다. 변경 후 저장을 눌러주세요.
+            {isDev
+              ? "드래그하여 순서를 변경할 수 있습니다. 변경 후 저장을 눌러주세요."
+              : "모듈별 기본 단가를 확인할 수 있습니다."}
           </p>
         </div>
-        <button
-          onClick={handleSave}
-          disabled={!hasChanges || saving}
-          className={`flex items-center gap-1.5 px-5 py-2.5 rounded-lg text-sm font-medium transition-colors ${
-            hasChanges
-              ? "bg-blue-600 text-white hover:bg-blue-700"
-              : "bg-gray-100 text-gray-400 cursor-not-allowed"
-          }`}
-        >
-          {saving ? (
-            <Loader2 className="w-4 h-4 animate-spin" />
-          ) : (
-            <Save className="w-4 h-4" />
-          )}
-          {saving ? "저장 중..." : "순서 저장"}
-        </button>
+        {isDev && (
+          <button
+            onClick={handleSave}
+            disabled={!hasChanges || saving}
+            className={`flex items-center gap-1.5 px-5 py-2.5 rounded-lg text-sm font-medium transition-colors ${
+              hasChanges
+                ? "bg-blue-600 text-white hover:bg-blue-700"
+                : "bg-gray-100 text-gray-400 cursor-not-allowed"
+            }`}
+          >
+            {saving ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : (
+              <Save className="w-4 h-4" />
+            )}
+            {saving ? "저장 중..." : "순서 저장"}
+          </button>
+        )}
       </div>
 
       <div className="bg-white rounded-xl border overflow-hidden">
         <table className="w-full">
           <thead className="bg-gray-50 border-b">
             <tr>
-              <th className="w-10" />
+              {isDev && <th className="w-10" />}
               <th className="text-left px-4 py-3 text-sm font-medium text-gray-500 w-12">#</th>
               <th className="text-left px-4 py-3 text-sm font-medium text-gray-500">코드</th>
               <th className="text-left px-4 py-3 text-sm font-medium text-gray-500">항목명</th>
@@ -215,22 +253,30 @@ export default function ModulesPage() {
               <th className="text-center px-4 py-3 text-sm font-medium text-gray-500">자동 포함</th>
             </tr>
           </thead>
-          <DndContext
-            sensors={sensors}
-            collisionDetection={closestCenter}
-            onDragEnd={handleDragEnd}
-          >
-            <SortableContext
-              items={modules.map((m) => m.id)}
-              strategy={verticalListSortingStrategy}
+          {isDev ? (
+            <DndContext
+              sensors={sensors}
+              collisionDetection={closestCenter}
+              onDragEnd={handleDragEnd}
             >
-              <tbody className="divide-y">
-                {modules.map((mod, i) => (
-                  <SortableRow key={mod.id} mod={mod} index={i} />
-                ))}
-              </tbody>
-            </SortableContext>
-          </DndContext>
+              <SortableContext
+                items={modules.map((m) => m.id)}
+                strategy={verticalListSortingStrategy}
+              >
+                <tbody className="divide-y">
+                  {modules.map((mod, i) => (
+                    <SortableRow key={mod.id} mod={mod} index={i} />
+                  ))}
+                </tbody>
+              </SortableContext>
+            </DndContext>
+          ) : (
+            <tbody className="divide-y">
+              {modules.map((mod, i) => (
+                <ReadOnlyRow key={mod.id} mod={mod} index={i} />
+              ))}
+            </tbody>
+          )}
         </table>
       </div>
     </div>
