@@ -1,0 +1,108 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+model User {
+  id        String   @id @default(cuid())
+  loginId   String   @unique
+  password  String
+  name      String
+  email     String   @unique
+  role      String   @default("sales") // sales | dev
+  team      String?
+  position  String?  // 직급: 팀장, 대리, 이사 등
+  createdAt DateTime @default(now())
+
+  createdQuotes  Quote[] @relation("CreatedBy")
+  reviewedQuotes Quote[] @relation("ReviewedBy")
+}
+
+model Module {
+  id              String   @id @default(cuid())
+  code            String   @unique
+  name            String
+  category        String   // common | camera | qr | text | server | ai | etc
+  description     String?
+  basePrice       Int
+  isAutoIncluded  Boolean  @default(false)
+  sortOrder       Int      @default(0)
+  isActive        Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  quoteItems QuoteItem[]
+}
+
+model Quote {
+  id              String   @id @default(cuid())
+  quoteNumber     String   @unique
+  status          String   @default("pending") // draft | pending | reviewing | approved | rejected
+  type            String   @default("rental") // rental | development
+
+  // 기본 정보
+  eventName       String
+  eventDate       String?
+  eventEndDate    String?
+  venue           String?
+  deadline        String?
+  expectedVisitors String?
+  requesterName   String
+  requesterContact String?
+  requesterEmail  String?
+
+  // 장비/환경 정보
+  screenDevice      String?  // kiosk | tablet | laptop
+  screenResolution  String?
+  screenComposition String?  // JSON array: ["splash","camera","printing","complete"]
+  printerType       String?  // Smart31 | Smart51 | Joyspace | Luka
+  networkType       String?  // wifi | offline | both
+  printSize         String?
+  ksnetMerchantId   String?  // KSNET 가맹점번호
+
+  // 기타
+  notes           String?
+  rejectionReason String?
+  reviewNote      String?
+  attachments     Json?    // [{fileName, originalName, size, mimeType}]
+
+  // 금액
+  subtotal        Int      @default(0)
+  vat             Int      @default(0)
+  totalAmount     Int      @default(0)
+
+  // 관계
+  createdById     String?
+  createdBy       User?    @relation("CreatedBy", fields: [createdById], references: [id])
+  reviewedById    String?
+  reviewedBy      User?    @relation("ReviewedBy", fields: [reviewedById], references: [id])
+
+  items           QuoteItem[]
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+model QuoteItem {
+  id          String  @id @default(cuid())
+  quoteId     String
+  quote       Quote   @relation(fields: [quoteId], references: [id], onDelete: Cascade)
+  moduleId    String?
+  module      Module? @relation(fields: [moduleId], references: [id])
+
+  sortOrder   Int     @default(0)
+  itemName    String
+  description String?
+  unitPrice   Int
+  quantity    Int     @default(1)
+  amount      Int
+  note        String?
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
