@@ -18,10 +18,10 @@ async function main() {
       code: "PRINT_SDK",
       name: "인쇄/출력 및 Printer SDK 연동",
       category: "common",
-      description: "카드/사진/티켓 인쇄 출력 로직 개발 및 Printer SDK 연동",
+      description: "카드/사진/티켓 인쇄 출력 로직 및 Printer SDK 연동 (단순 insert/out 포함)",
       basePrice: 100000,
       isAutoIncluded: false,
-      sortOrder: 2,
+      sortOrder: 11,
     },
     {
       code: "CAM_PHOTO",
