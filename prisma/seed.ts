@@ -50,15 +50,7 @@ async function main() {
       isAutoIncluded: false,
       sortOrder: 6,
     },
-    {
-      code: "SERVER_SYNC",
-      name: "서버 연동/데이터 저장",
-      category: "server",
-      description: "서버 연동을 통한 실시간 데이터 저장 및 통계",
-      basePrice: 500000,
-      isAutoIncluded: false,
-      sortOrder: 7,
-    },
+    // SERVER_SYNC 비활성화 - 무료 서비스(DB 직접 연결 로그)로 대체
     {
       code: "AI_STYLE",
       name: "AI 화풍변환",
