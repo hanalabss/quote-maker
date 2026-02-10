@@ -49,24 +49,24 @@ function ReadOnlyRow({ mod, index }: { mod: Module; index: number }) {
   return (
     <tr className="hover:bg-gray-50">
       <td className="px-4 py-3 text-sm text-gray-400 w-12">{index + 1}</td>
-      <td className="px-4 py-3 text-sm font-mono text-gray-600">{mod.code}</td>
-      <td className="px-4 py-3">
+      <td className="px-3 sm:px-4 py-3 text-sm font-mono text-gray-600 hidden sm:table-cell">{mod.code}</td>
+      <td className="px-3 sm:px-4 py-3">
         <div className="text-sm font-medium">{mod.name}</div>
         {mod.description && (
           <div className="text-xs text-gray-500 mt-0.5">{mod.description}</div>
         )}
       </td>
-      <td className="px-4 py-3 text-sm text-gray-500 hidden md:table-cell">
+      <td className="px-3 sm:px-4 py-3 text-sm text-gray-500 hidden md:table-cell">
         {CATEGORY_LABELS[mod.category] || mod.category}
       </td>
-      <td className="px-4 py-3 text-sm text-right font-medium">
+      <td className="px-3 sm:px-4 py-3 text-sm text-right font-medium whitespace-nowrap">
         {mod.basePrice === 0 && mod.code === "AI_STYLE" ? (
           <span className="text-orange-600">협의</span>
         ) : (
           `${formatKRW(mod.basePrice)}원`
         )}
       </td>
-      <td className="px-4 py-3 text-center">
+      <td className="px-3 sm:px-4 py-3 text-center">
         {mod.isAutoIncluded && (
           <span className="inline-block px-2 py-0.5 bg-green-100 text-green-700 text-xs rounded-full">
             자동
@@ -104,30 +104,30 @@ function SortableRow({ mod, index }: { mod: Module; index: number }) {
         <button
           {...attributes}
           {...listeners}
-          className="p-1 text-gray-400 hover:text-gray-600 cursor-grab active:cursor-grabbing"
+          className="p-2 text-gray-400 hover:text-gray-600 cursor-grab active:cursor-grabbing"
         >
           <GripVertical className="w-4 h-4" />
         </button>
       </td>
-      <td className="px-4 py-3 text-sm text-gray-400 w-12">{index + 1}</td>
-      <td className="px-4 py-3 text-sm font-mono text-gray-600">{mod.code}</td>
-      <td className="px-4 py-3">
+      <td className="px-3 sm:px-4 py-3 text-sm text-gray-400 w-12">{index + 1}</td>
+      <td className="px-3 sm:px-4 py-3 text-sm font-mono text-gray-600 hidden sm:table-cell">{mod.code}</td>
+      <td className="px-3 sm:px-4 py-3">
         <div className="text-sm font-medium">{mod.name}</div>
         {mod.description && (
           <div className="text-xs text-gray-500 mt-0.5">{mod.description}</div>
         )}
       </td>
-      <td className="px-4 py-3 text-sm text-gray-500 hidden md:table-cell">
+      <td className="px-3 sm:px-4 py-3 text-sm text-gray-500 hidden md:table-cell">
         {CATEGORY_LABELS[mod.category] || mod.category}
       </td>
-      <td className="px-4 py-3 text-sm text-right font-medium">
+      <td className="px-3 sm:px-4 py-3 text-sm text-right font-medium whitespace-nowrap">
         {mod.basePrice === 0 && mod.code === "AI_STYLE" ? (
           <span className="text-orange-600">협의</span>
         ) : (
           `${formatKRW(mod.basePrice)}원`
         )}
       </td>
-      <td className="px-4 py-3 text-center">
+      <td className="px-3 sm:px-4 py-3 text-center">
         {mod.isAutoIncluded && (
           <span className="inline-block px-2 py-0.5 bg-green-100 text-green-700 text-xs rounded-full">
             자동
@@ -224,7 +224,7 @@ export default function ModulesPage() {
           <button
             onClick={handleSave}
             disabled={!hasChanges || saving}
-            className={`flex items-center gap-1.5 px-5 py-2.5 rounded-lg text-sm font-medium transition-colors ${
+            className={`flex items-center gap-1.5 px-3 sm:px-5 py-2 sm:py-2.5 rounded-lg text-xs sm:text-sm font-medium transition-colors shrink-0 ${
               hasChanges
                 ? "bg-blue-600 text-white hover:bg-blue-700"
                 : "bg-gray-100 text-gray-400 cursor-not-allowed"
@@ -241,16 +241,17 @@ export default function ModulesPage() {
       </div>
 
       <div className="bg-white rounded-xl border overflow-hidden">
+        <div className="overflow-x-auto">
         <table className="w-full">
           <thead className="bg-gray-50 border-b">
             <tr>
               {isDev && <th className="w-10" />}
-              <th className="text-left px-4 py-3 text-sm font-medium text-gray-500 w-12">#</th>
-              <th className="text-left px-4 py-3 text-sm font-medium text-gray-500">코드</th>
-              <th className="text-left px-4 py-3 text-sm font-medium text-gray-500">항목명</th>
-              <th className="text-left px-4 py-3 text-sm font-medium text-gray-500 hidden md:table-cell">분류</th>
-              <th className="text-right px-4 py-3 text-sm font-medium text-gray-500">기본 단가</th>
-              <th className="text-center px-4 py-3 text-sm font-medium text-gray-500">자동 포함</th>
+              <th className="text-left px-3 sm:px-4 py-3 text-xs sm:text-sm font-medium text-gray-500 w-12">#</th>
+              <th className="text-left px-3 sm:px-4 py-3 text-xs sm:text-sm font-medium text-gray-500 hidden sm:table-cell">코드</th>
+              <th className="text-left px-3 sm:px-4 py-3 text-xs sm:text-sm font-medium text-gray-500">항목명</th>
+              <th className="text-left px-3 sm:px-4 py-3 text-xs sm:text-sm font-medium text-gray-500 hidden md:table-cell">분류</th>
+              <th className="text-right px-3 sm:px-4 py-3 text-xs sm:text-sm font-medium text-gray-500 whitespace-nowrap">기본 단가</th>
+              <th className="text-center px-3 sm:px-4 py-3 text-xs sm:text-sm font-medium text-gray-500 whitespace-nowrap">자동 포함</th>
             </tr>
           </thead>
           {isDev ? (
@@ -278,6 +279,7 @@ export default function ModulesPage() {
             </tbody>
           )}
         </table>
+        </div>
       </div>
     </div>
   );

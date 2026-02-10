@@ -187,26 +187,26 @@ export default function QuoteDetailPage({
   return (
     <div>
       {/* Header */}
-      <div className="flex items-center justify-between mb-6">
-        <div className="flex items-center gap-3">
-          <Link href="/dashboard/quotes" className="text-gray-400 hover:text-gray-600">
+      <div className="flex items-center justify-between mb-6 gap-2">
+        <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+          <Link href="/dashboard/quotes" className="text-gray-400 hover:text-gray-600 shrink-0">
             <ArrowLeft className="w-5 h-5" />
           </Link>
-          <div>
-            <h1 className="text-xl font-bold flex items-center gap-2">
-              {quote.quoteNumber}
+          <div className="min-w-0">
+            <h1 className="text-base sm:text-xl font-bold flex items-center gap-2">
+              <span className="truncate">{quote.quoteNumber}</span>
               <span
-                className={`text-xs px-2.5 py-0.5 rounded-full ${
+                className={`text-xs px-2.5 py-0.5 rounded-full shrink-0 ${
                   STATUS_COLORS[quote.status]
                 }`}
               >
                 {STATUS_LABELS[quote.status]}
               </span>
             </h1>
-            <p className="text-sm text-gray-500">{quote.eventName}</p>
+            <p className="text-xs sm:text-sm text-gray-500 truncate">{quote.eventName}</p>
           </div>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 shrink-0">
           <button
             onClick={async () => {
               try {
@@ -232,10 +232,10 @@ export default function QuoteDetailPage({
                 alert("다운로드에 실패했습니다.");
               }
             }}
-            className="flex items-center gap-1.5 px-4 py-2 text-sm border rounded-lg hover:bg-gray-50 transition-colors"
+            className="flex items-center gap-1.5 px-2.5 sm:px-4 py-2 text-xs sm:text-sm border rounded-lg hover:bg-gray-50 transition-colors"
           >
             <Download className="w-4 h-4" />
-            Excel 다운로드
+            <span className="hidden sm:inline">Excel </span>다운로드
           </button>
         </div>
       </div>
@@ -434,8 +434,8 @@ export default function QuoteDetailPage({
                 <div className="space-y-3">
                   {editItems.map((item, i) => (
                     <div key={item.id} className="flex items-start gap-2 p-3 bg-gray-50 rounded-lg">
-                      <div className="flex-1 grid sm:grid-cols-4 gap-2">
-                        <div className="sm:col-span-2">
+                      <div className="flex-1 grid sm:grid-cols-2 lg:grid-cols-4 gap-2">
+                        <div className="sm:col-span-2 lg:col-span-2">
                           <input
                             value={item.itemName}
                             onChange={(e) => updateEditItem(i, "itemName", e.target.value)}
@@ -514,13 +514,14 @@ export default function QuoteDetailPage({
               </>
             ) : (
               <>
+                <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="border-b">
                       <th className="text-left py-2 text-gray-500 font-medium w-8">#</th>
                       <th className="text-left py-2 text-gray-500 font-medium">항목</th>
-                      <th className="text-right py-2 text-gray-500 font-medium">단가</th>
-                      <th className="text-right py-2 text-gray-500 font-medium">금액</th>
+                      <th className="text-right py-2 text-gray-500 font-medium whitespace-nowrap">단가</th>
+                      <th className="text-right py-2 text-gray-500 font-medium whitespace-nowrap">금액</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -555,6 +556,7 @@ export default function QuoteDetailPage({
                     </tr>
                   </tfoot>
                 </table>
+                </div>
               </>
             )}
           </div>
@@ -591,12 +593,12 @@ export default function QuoteDetailPage({
 
           {/* 액션 버튼 */}
           {(quote.status === "pending" || quote.status === "reviewing") && (
-            <div className="flex gap-3">
+            <div className="flex flex-wrap gap-2 sm:gap-3">
               {quote.status === "pending" && (
                 <button
                   onClick={() => updateStatus("reviewing")}
                   disabled={saving}
-                  className="flex items-center gap-1.5 px-5 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors"
+                  className="flex items-center gap-1.5 px-3 sm:px-5 py-2 sm:py-2.5 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors"
                 >
                   검토 시작
                 </button>
@@ -604,7 +606,7 @@ export default function QuoteDetailPage({
               <button
                 onClick={() => updateStatus("approved")}
                 disabled={saving}
-                className="flex items-center gap-1.5 px-5 py-2.5 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 transition-colors"
+                className="flex items-center gap-1.5 px-3 sm:px-5 py-2 sm:py-2.5 text-sm bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 transition-colors"
               >
                 <CheckCircle className="w-4 h-4" />
                 승인
@@ -612,7 +614,7 @@ export default function QuoteDetailPage({
               <button
                 onClick={() => setShowRejectModal(true)}
                 disabled={saving}
-                className="flex items-center gap-1.5 px-5 py-2.5 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50 transition-colors"
+                className="flex items-center gap-1.5 px-3 sm:px-5 py-2 sm:py-2.5 text-sm bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50 transition-colors"
               >
                 <XCircle className="w-4 h-4" />
                 반려

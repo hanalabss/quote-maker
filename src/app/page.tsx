@@ -64,15 +64,15 @@ export default function HomePage() {
           </div>
         </div>
 
-        <div className="text-center mb-12">
-          <h1 className="text-4xl font-bold text-gray-900 mb-3">QuoteMaker</h1>
-          <p className="text-lg text-gray-500">하나플랫폼 견적서 자동화 시스템</p>
+        <div className="text-center mb-8 sm:mb-12">
+          <h1 className="text-2xl sm:text-4xl font-bold text-gray-900 mb-3">QuoteMaker</h1>
+          <p className="text-sm sm:text-lg text-gray-500">하나플랫폼 견적서 자동화 시스템</p>
         </div>
 
-        <div className="grid md:grid-cols-3 gap-6">
+        <div className="grid sm:grid-cols-2 md:grid-cols-3 gap-4 sm:gap-6">
           <Link
             href="/request"
-            className="group block p-8 bg-white rounded-2xl shadow-sm border border-gray-200 hover:shadow-md hover:border-blue-300 transition-all"
+            className="group block p-5 sm:p-8 bg-white rounded-2xl shadow-sm border border-gray-200 hover:shadow-md hover:border-blue-300 transition-all"
           >
             <div className="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center mb-4 group-hover:bg-blue-200 transition-colors">
               <FileText className="w-6 h-6 text-blue-600" />
@@ -85,7 +85,7 @@ export default function HomePage() {
 
           <Link
             href="/dashboard/quotes"
-            className="group block p-8 bg-white rounded-2xl shadow-sm border border-gray-200 hover:shadow-md hover:border-indigo-300 transition-all"
+            className="group block p-5 sm:p-8 bg-white rounded-2xl shadow-sm border border-gray-200 hover:shadow-md hover:border-indigo-300 transition-all"
           >
             <div className="w-12 h-12 bg-indigo-100 rounded-xl flex items-center justify-center mb-4 group-hover:bg-indigo-200 transition-colors">
               <ClipboardList className="w-6 h-6 text-indigo-600" />
@@ -102,7 +102,7 @@ export default function HomePage() {
 
           <Link
             href="/dashboard/modules"
-            className="group block p-8 bg-white rounded-2xl shadow-sm border border-gray-200 hover:shadow-md hover:border-emerald-300 transition-all"
+            className="group block p-5 sm:p-8 bg-white rounded-2xl shadow-sm border border-gray-200 hover:shadow-md hover:border-emerald-300 transition-all"
           >
             <div className="w-12 h-12 bg-emerald-100 rounded-xl flex items-center justify-center mb-4 group-hover:bg-emerald-200 transition-colors">
               <DollarSign className="w-6 h-6 text-emerald-600" />

@@ -900,6 +900,7 @@ export default function RequestPage() {
 
                 <div className="p-4 bg-gray-50 rounded-xl">
                   <h3 className="text-sm font-medium text-gray-500 mb-3">견적 항목</h3>
+                  <div className="overflow-x-auto">
                   <table className="w-full text-sm">
                     <thead>
                       <tr className="border-b">
@@ -957,6 +958,7 @@ export default function RequestPage() {
                       </tr>
                     </tfoot>
                   </table>
+                  </div>
                 </div>
 
                 {(form.screenDevice || form.printerType || form.networkType || form.screenComposition.length > 0 || form.useDbLogging || form.useKsnetPayment || form.notes) && (

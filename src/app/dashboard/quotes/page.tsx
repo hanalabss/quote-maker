@@ -88,39 +88,39 @@ export default function QuotesPage() {
             <Clock className="w-4 h-4" />
             <span className="text-sm">대기중</span>
           </div>
-          <p className="text-2xl font-bold">{statusCounts["pending"] || 0}</p>
+          <p className="text-xl sm:text-2xl font-bold">{statusCounts["pending"] || 0}</p>
         </div>
         <div className="bg-white rounded-xl p-4 border">
           <div className="flex items-center gap-2 text-blue-600 mb-1">
             <Eye className="w-4 h-4" />
             <span className="text-sm">검토중</span>
           </div>
-          <p className="text-2xl font-bold">{statusCounts["reviewing"] || 0}</p>
+          <p className="text-xl sm:text-2xl font-bold">{statusCounts["reviewing"] || 0}</p>
         </div>
         <div className="bg-white rounded-xl p-4 border">
           <div className="flex items-center gap-2 text-green-600 mb-1">
             <CheckCircle className="w-4 h-4" />
             <span className="text-sm">승인</span>
           </div>
-          <p className="text-2xl font-bold">{statusCounts["approved"] || 0}</p>
+          <p className="text-xl sm:text-2xl font-bold">{statusCounts["approved"] || 0}</p>
         </div>
         <div className="bg-white rounded-xl p-4 border">
           <div className="flex items-center gap-2 text-red-600 mb-1">
             <XCircle className="w-4 h-4" />
             <span className="text-sm">반려</span>
           </div>
-          <p className="text-2xl font-bold">{statusCounts["rejected"] || 0}</p>
+          <p className="text-xl sm:text-2xl font-bold">{statusCounts["rejected"] || 0}</p>
         </div>
       </div>
 
       {/* 필터 + 검색 */}
       <div className="flex flex-col sm:flex-row gap-3 mb-4">
-        <div className="flex gap-1 bg-white rounded-lg border p-1">
+        <div className="flex gap-0.5 sm:gap-1 bg-white rounded-lg border p-1 overflow-x-auto">
           {FILTERS.map((f) => (
             <button
               key={f.value}
               onClick={() => setFilter(f.value)}
-              className={`px-3 py-1.5 text-sm rounded-md transition-colors ${
+              className={`px-2 sm:px-3 py-1.5 text-xs sm:text-sm rounded-md transition-colors whitespace-nowrap ${
                 filter === f.value
                   ? "bg-blue-600 text-white"
                   : "text-gray-600 hover:bg-gray-100"
@@ -149,45 +149,46 @@ export default function QuotesPage() {
         ) : filtered.length === 0 ? (
           <div className="p-12 text-center text-gray-400">견적 요청이 없습니다</div>
         ) : (
+          <div className="overflow-x-auto">
           <table className="w-full">
             <thead className="bg-gray-50 border-b">
               <tr>
-                <th className="text-left px-4 py-3 text-sm font-medium text-gray-500">견적번호</th>
-                <th className="text-left px-4 py-3 text-sm font-medium text-gray-500">행사명</th>
-                <th className="text-left px-4 py-3 text-sm font-medium text-gray-500 hidden sm:table-cell">요청자</th>
-                <th className="text-right px-4 py-3 text-sm font-medium text-gray-500">금액</th>
-                <th className="text-center px-4 py-3 text-sm font-medium text-gray-500">상태</th>
-                <th className="text-center px-4 py-3 text-sm font-medium text-gray-500">요청일</th>
-                <th className="px-4 py-3"></th>
+                <th className="text-left px-3 sm:px-4 py-3 text-xs sm:text-sm font-medium text-gray-500">견적번호</th>
+                <th className="text-left px-3 sm:px-4 py-3 text-xs sm:text-sm font-medium text-gray-500">행사명</th>
+                <th className="text-left px-3 sm:px-4 py-3 text-xs sm:text-sm font-medium text-gray-500 hidden sm:table-cell">요청자</th>
+                <th className="text-right px-3 sm:px-4 py-3 text-xs sm:text-sm font-medium text-gray-500 hidden sm:table-cell">금액</th>
+                <th className="text-center px-3 sm:px-4 py-3 text-xs sm:text-sm font-medium text-gray-500">상태</th>
+                <th className="text-center px-3 sm:px-4 py-3 text-xs sm:text-sm font-medium text-gray-500 hidden md:table-cell">요청일</th>
+                <th className="px-3 sm:px-4 py-3"></th>
               </tr>
             </thead>
             <tbody className="divide-y">
               {filtered.map((q) => (
                 <tr key={q.id} className="hover:bg-gray-50 transition-colors">
-                  <td className="px-4 py-3 text-sm font-mono">{q.quoteNumber}</td>
-                  <td className="px-4 py-3 text-sm font-medium">{q.eventName}</td>
-                  <td className="px-4 py-3 text-sm text-gray-600 hidden sm:table-cell">
+                  <td className="px-3 sm:px-4 py-3 text-xs sm:text-sm font-mono">{q.quoteNumber}</td>
+                  <td className="px-3 sm:px-4 py-3 text-xs sm:text-sm font-medium max-w-[120px] sm:max-w-none truncate">{q.eventName}</td>
+                  <td className="px-3 sm:px-4 py-3 text-sm text-gray-600 hidden sm:table-cell">
                     {q.requesterName}
                   </td>
-                  <td className="px-4 py-3 text-sm text-right font-medium">
+                  <td className="px-3 sm:px-4 py-3 text-sm text-right font-medium hidden sm:table-cell">
                     {formatKRW(q.totalAmount)}원
                   </td>
-                  <td className="px-4 py-3 text-center">
+                  <td className="px-3 sm:px-4 py-3 text-center">
                     <span
-                      className={`inline-block px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                      className={`inline-block px-2 sm:px-2.5 py-0.5 rounded-full text-xs font-medium ${
                         STATUS_COLORS[q.status as QuoteStatus]
                       }`}
                     >
                       {STATUS_LABELS[q.status as QuoteStatus]}
                     </span>
                   </td>
-                  <td className="px-4 py-3 text-sm text-gray-500 text-center">
+                  <td className="px-3 sm:px-4 py-3 text-sm text-gray-500 text-center hidden md:table-cell">
                     {new Date(q.createdAt).toLocaleDateString("ko-KR")}
                   </td>
-                  <td className="px-4 py-3">
+                  <td className="px-3 sm:px-4 py-3">
                     <Link
                       href={`/dashboard/quotes/${q.id}`}
-                      className="text-blue-600 hover:text-blue-800 text-sm font-medium"
+                      className="text-blue-600 hover:text-blue-800 text-xs sm:text-sm font-medium"
                     >
                       상세
                     </Link>
@@ -196,6 +197,7 @@ export default function QuotesPage() {
               ))}
             </tbody>
           </table>
+          </div>
         )}
       </div>
     </div>

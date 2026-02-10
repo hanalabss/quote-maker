@@ -42,7 +42,7 @@ export default function LoginPage() {
     <div className="min-h-screen flex items-center justify-center bg-gray-50 p-4">
       <div className="w-full max-w-sm">
         <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold text-gray-900 mb-1">QuoteMaker</h1>
+          <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-1">QuoteMaker</h1>
           <p className="text-sm text-gray-500">하나플랫폼 견적서 자동화 시스템</p>
         </div>
 
