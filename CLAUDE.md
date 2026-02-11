@@ -4,6 +4,10 @@
 하나플랫폼의 견적서 자동화 웹 애플리케이션.
 사업팀이 질문지 폼을 입력하면 렌탈/행사 견적서가 자동 생성되고, 개발팀이 검토/승인 후 최종 견적서를 출력하는 시스템.
 
+## URLs
+- **Production**: https://quote-maker-alpha.vercel.app
+- **GitHub**: https://github.com/hanalabss/quote-maker
+
 ## Tech Stack
 - **Framework**: Next.js 14 (App Router)
 - **Language**: TypeScript
@@ -52,10 +56,11 @@ src/
 ## Business Logic
 
 ### 견적 유형
-| 유형 | 가격대 | 자동화 수준 |
-|------|--------|------------|
-| 렌탈/행사 | 60~220만원 | 모듈 조합 자동 견적 |
-| 프로그램 개발 | 1,400~3,000만원 | Phase 2에서 지원 |
+| 유형 | 코드 | 가격 배율 | 비고 |
+|------|------|-----------|------|
+| 렌탈 | rental | 100% (기본가) | 행사/전시 렌탈 |
+| 재행사 | re_event | 30% (70% 할인) | 재행사 할인 |
+| 판매 | sale | 130% (30% 추가) | 프로그램 판매 |
 
 ### 기본 모듈 가격표
 | 코드 | 항목 | 기본 단가 |
@@ -98,7 +103,7 @@ src/
 
 ## Commands
 ```bash
-npm run dev          # 개발 서버
+npm run dev          # 개발 서버 (localhost:3100)
 npm run build        # 빌드
 npm run db:push      # DB 스키마 적용
 npm run db:seed      # 초기 데이터 시드
