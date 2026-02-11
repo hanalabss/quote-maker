@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { FileText, Package } from "lucide-react";
+import { FileText, Package, UserCircle } from "lucide-react";
 import { cookies } from "next/headers";
 
 export default async function DashboardLayout({
@@ -44,12 +44,21 @@ export default async function DashboardLayout({
               )}
             </nav>
           </div>
-          <Link
-            href="/request"
-            className="text-xs sm:text-sm px-2.5 sm:px-4 py-1.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors shrink-0"
-          >
-            + <span className="hidden sm:inline">새 </span>견적 요청
-          </Link>
+          <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+            <Link
+              href="/dashboard/profile"
+              className="p-1.5 sm:p-2 rounded-lg hover:bg-gray-100 text-gray-500 hover:text-gray-700 transition-colors"
+              title="내 정보"
+            >
+              <UserCircle className="w-5 h-5" />
+            </Link>
+            <Link
+              href="/request"
+              className="text-xs sm:text-sm px-2.5 sm:px-4 py-1.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+            >
+              + <span className="hidden sm:inline">새 </span>견적 요청
+            </Link>
+          </div>
         </div>
       </header>
       <main className="max-w-6xl mx-auto px-4 py-6">{children}</main>

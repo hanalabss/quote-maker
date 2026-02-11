@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { FileText, ClipboardList, LogOut, DollarSign } from "lucide-react";
+import { FileText, ClipboardList, LogOut, DollarSign, Settings } from "lucide-react";
 
 interface AuthUser {
   id: string;
@@ -54,6 +54,13 @@ export default function HomePage() {
               {user?.position && <span className="text-gray-400"> {user.position}</span>}
               {user?.team && <span className="text-gray-400"> · {user.team}</span>}
             </span>
+            <Link
+              href="/dashboard/profile"
+              className="flex items-center gap-1 text-sm text-gray-400 hover:text-blue-600 transition-colors"
+            >
+              <Settings className="w-4 h-4" />
+              정보 수정
+            </Link>
             <button
               onClick={handleLogout}
               className="flex items-center gap-1 text-sm text-gray-400 hover:text-red-500 transition-colors"

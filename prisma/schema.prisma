@@ -16,6 +16,7 @@ model User {
   name      String
   email     String   @unique
   role      String   @default("sales") // sales | dev
+  phone     String?
   team      String?
   position  String?  // 직급: 팀장, 대리, 이사 등
   createdAt DateTime @default(now())
