@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import ExcelJS from "exceljs";
 import { amountToKorean, formatKRW } from "@/lib/pricing";
+import { TYPE_LABELS } from "@/types";
+import type { QuoteType } from "@/types";
 
 // 공통 스타일
 const thin: Partial<ExcelJS.Border> = { style: "thin" };
@@ -64,7 +66,8 @@ export async function GET(
   // ══════════════════════════════════════
   ws.mergeCells("A3:F9");
   const descCell = ws.getCell("A3");
-  descCell.value = "해당 프로그램의 개발 단가를\n아래와 같이 견적하오니 검토바랍니다.";
+  const typeLabel = TYPE_LABELS[quote.type as QuoteType] || quote.type;
+  descCell.value = `해당 프로그램의 개발 단가를\n아래와 같이 견적하오니 검토바랍니다.\n[${typeLabel}]`;
   descCell.font = { size: 12 };
   descCell.alignment = { horizontal: "center", vertical: "middle", wrapText: true };
   descCell.border = { top: thin, left: thin, bottom: thin };

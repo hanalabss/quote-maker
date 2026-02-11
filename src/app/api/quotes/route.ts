@@ -3,6 +3,8 @@ import { cookies } from "next/headers";
 import { prisma } from "@/lib/db";
 import { calculateQuote } from "@/lib/pricing";
 import { sendQuoteNotification } from "@/lib/email";
+import { TYPE_PRICE_RATE } from "@/types";
+import type { QuoteType } from "@/types";
 
 function getAuthUser() {
   // Note: cookies() is async in Next.js 14+ but we call it at request time
@@ -124,8 +126,10 @@ export async function POST(request: NextRequest) {
       complete: "인쇄 완료",
     };
 
-    // 가격 산정
-    const pricing = calculateQuote(allModules);
+    // 가격 산정 (유형별 배율 적용)
+    const quoteType = (type || "rental") as QuoteType;
+    const priceRate = TYPE_PRICE_RATE[quoteType] ?? 1.0;
+    const pricing = calculateQuote(allModules, priceRate);
 
     // UI_BASIC 항목에 화면 구성 설명 적용
     if (screenComposition?.length > 0) {
@@ -140,30 +144,32 @@ export async function POST(request: NextRequest) {
 
     // 선택 인쇄 항목 추가 (화면 구성에 select_print 포함 시)
     if ((screenComposition as string[])?.includes("select_print")) {
+      const selectPrintPrice = Math.round(150000 * priceRate);
       pricing.items.push({
         moduleCode: "SELECT_PRINT",
         moduleName: "선택 인쇄 기능",
         description: "업로드 이미지 선택 출력",
-        unitPrice: 150000,
+        unitPrice: selectPrintPrice,
         quantity: 1,
-        amount: 150000,
+        amount: selectPrintPrice,
       });
-      pricing.subtotal += 150000;
+      pricing.subtotal += selectPrintPrice;
       pricing.vat = Math.round(pricing.subtotal * 0.1);
       pricing.totalAmount = pricing.subtotal + pricing.vat;
     }
 
     // KSNET 결제 연동 항목 추가
     if (useKsnetPayment) {
+      const ksnetPrice = Math.round(300000 * priceRate);
       pricing.items.push({
         moduleCode: "KSNET_PAY",
         moduleName: "KSNET 결제 시스템 연동",
         description: "KSNET 실결제 연동, 카드 결제 테스트 및 검증, 실결제 환경 적용",
-        unitPrice: 300000,
+        unitPrice: ksnetPrice,
         quantity: 1,
-        amount: 300000,
+        amount: ksnetPrice,
       });
-      pricing.subtotal += 300000;
+      pricing.subtotal += ksnetPrice;
       pricing.vat = Math.round(pricing.subtotal * 0.1);
       pricing.totalAmount = pricing.subtotal + pricing.vat;
     }

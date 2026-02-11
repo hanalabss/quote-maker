@@ -18,8 +18,8 @@ import {
   Music,
 } from "lucide-react";
 import { formatKRW } from "@/lib/pricing";
-import type { QuoteStatus } from "@/types";
-import { STATUS_LABELS, STATUS_COLORS } from "@/types";
+import type { QuoteStatus, QuoteType } from "@/types";
+import { STATUS_LABELS, STATUS_COLORS, TYPE_LABELS, TYPE_COLORS } from "@/types";
 
 interface QuoteItem {
   id: string;
@@ -193,8 +193,15 @@ export default function QuoteDetailPage({
             <ArrowLeft className="w-5 h-5" />
           </Link>
           <div className="min-w-0">
-            <h1 className="text-base sm:text-xl font-bold flex items-center gap-2">
+            <h1 className="text-base sm:text-xl font-bold flex items-center gap-2 flex-wrap">
               <span className="truncate">{quote.quoteNumber}</span>
+              <span
+                className={`text-xs px-2.5 py-0.5 rounded-full shrink-0 ${
+                  TYPE_COLORS[quote.type as QuoteType] || "bg-gray-100 text-gray-700"
+                }`}
+              >
+                {TYPE_LABELS[quote.type as QuoteType] || quote.type}
+              </span>
               <span
                 className={`text-xs px-2.5 py-0.5 rounded-full shrink-0 ${
                   STATUS_COLORS[quote.status]

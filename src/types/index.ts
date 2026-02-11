@@ -1,5 +1,5 @@
 export type QuoteStatus = "draft" | "pending" | "reviewing" | "approved" | "rejected";
-export type QuoteType = "rental" | "development";
+export type QuoteType = "sale" | "rental" | "re_event";
 export type UserRole = "sales" | "dev";
 
 export interface QuoteFormData {
@@ -30,6 +30,24 @@ export interface ModuleOption {
   basePrice: number;
   isAutoIncluded: boolean;
 }
+
+export const TYPE_LABELS: Record<QuoteType, string> = {
+  sale: "판매",
+  rental: "렌탈",
+  re_event: "재행사",
+};
+
+export const TYPE_COLORS: Record<QuoteType, string> = {
+  sale: "bg-orange-100 text-orange-700",
+  rental: "bg-blue-100 text-blue-700",
+  re_event: "bg-teal-100 text-teal-700",
+};
+
+export const TYPE_PRICE_RATE: Record<QuoteType, number> = {
+  sale: 1.3,
+  rental: 1.0,
+  re_event: 0.3,
+};
 
 export const STATUS_LABELS: Record<QuoteStatus, string> = {
   draft: "임시저장",

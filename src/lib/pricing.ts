@@ -15,22 +15,30 @@ interface PricingResult {
 }
 
 export function calculateQuote(
-  selectedModules: { code: string; name: string; description: string | null; basePrice: number }[]
+  selectedModules: { code: string; name: string; description: string | null; basePrice: number }[],
+  priceRate: number = 1.0
 ): PricingResult {
-  const items: PricingItem[] = selectedModules.map((mod) => ({
-    moduleCode: mod.code,
-    moduleName: mod.name,
-    description: mod.description,
-    unitPrice: mod.basePrice,
-    quantity: 1,
-    amount: mod.basePrice,
-  }));
+  const items: PricingItem[] = selectedModules.map((mod) => {
+    const adjustedPrice = Math.round(mod.basePrice * priceRate);
+    return {
+      moduleCode: mod.code,
+      moduleName: mod.name,
+      description: mod.description,
+      unitPrice: adjustedPrice,
+      quantity: 1,
+      amount: adjustedPrice,
+    };
+  });
 
   const subtotal = items.reduce((sum, item) => sum + item.amount, 0);
   const vat = Math.round(subtotal * 0.1);
   const totalAmount = subtotal + vat;
 
   return { items, subtotal, vat, totalAmount };
+}
+
+export function applyPriceRate(basePrice: number, priceRate: number): number {
+  return Math.round(basePrice * priceRate);
 }
 
 export function formatKRW(amount: number): string {

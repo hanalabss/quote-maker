@@ -4,8 +4,8 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import { Clock, CheckCircle, XCircle, Eye, Search, FileSpreadsheet } from "lucide-react";
 import { formatKRW } from "@/lib/pricing";
-import type { QuoteStatus } from "@/types";
-import { STATUS_LABELS, STATUS_COLORS } from "@/types";
+import type { QuoteStatus, QuoteType } from "@/types";
+import { STATUS_LABELS, STATUS_COLORS, TYPE_LABELS, TYPE_COLORS } from "@/types";
 
 interface QuoteListItem {
   id: string;
@@ -155,6 +155,7 @@ export default function QuotesPage() {
               <tr>
                 <th className="text-left px-3 sm:px-4 py-3 text-xs sm:text-sm font-medium text-gray-500">견적번호</th>
                 <th className="text-left px-3 sm:px-4 py-3 text-xs sm:text-sm font-medium text-gray-500">행사명</th>
+                <th className="text-center px-3 sm:px-4 py-3 text-xs sm:text-sm font-medium text-gray-500 hidden sm:table-cell">유형</th>
                 <th className="text-left px-3 sm:px-4 py-3 text-xs sm:text-sm font-medium text-gray-500 hidden sm:table-cell">요청자</th>
                 <th className="text-right px-3 sm:px-4 py-3 text-xs sm:text-sm font-medium text-gray-500 hidden sm:table-cell">금액</th>
                 <th className="text-center px-3 sm:px-4 py-3 text-xs sm:text-sm font-medium text-gray-500">상태</th>
@@ -167,6 +168,13 @@ export default function QuotesPage() {
                 <tr key={q.id} className="hover:bg-gray-50 transition-colors">
                   <td className="px-3 sm:px-4 py-3 text-xs sm:text-sm font-mono">{q.quoteNumber}</td>
                   <td className="px-3 sm:px-4 py-3 text-xs sm:text-sm font-medium max-w-[120px] sm:max-w-none truncate">{q.eventName}</td>
+                  <td className="px-3 sm:px-4 py-3 text-center hidden sm:table-cell">
+                    <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium ${
+                      TYPE_COLORS[q.type as QuoteType] || "bg-gray-100 text-gray-700"
+                    }`}>
+                      {TYPE_LABELS[q.type as QuoteType] || q.type}
+                    </span>
+                  </td>
                   <td className="px-3 sm:px-4 py-3 text-sm text-gray-600 hidden sm:table-cell">
                     {q.requesterName}
                   </td>

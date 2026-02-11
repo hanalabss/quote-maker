@@ -44,7 +44,7 @@ model Quote {
   id              String   @id @default(cuid())
   quoteNumber     String   @unique
   status          String   @default("pending") // draft | pending | reviewing | approved | rejected
-  type            String   @default("rental") // rental | development
+  type            String   @default("rental") // sale | rental | re_event
 
   // 기본 정보
   eventName       String

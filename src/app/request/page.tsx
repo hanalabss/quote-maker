@@ -3,7 +3,9 @@
 import { useState, useEffect, useRef } from "react";
 import { ArrowLeft, ArrowRight, Check, Send, Loader2, Paperclip, X, FileText, Image, Music } from "lucide-react";
 import Link from "next/link";
-import { formatKRW } from "@/lib/pricing";
+import { formatKRW, applyPriceRate } from "@/lib/pricing";
+import type { QuoteType } from "@/types";
+import { TYPE_LABELS, TYPE_PRICE_RATE } from "@/types";
 
 interface Module {
   id: string;
@@ -53,6 +55,12 @@ const SCREEN_FLOWS = [
   { value: "complete", label: "인쇄 완료" },
 ];
 
+const QUOTE_TYPES: { value: QuoteType; label: string; description: string; color: string }[] = [
+  { value: "rental", label: "렌탈", description: "행사/전시 렌탈 (기본가)", color: "blue" },
+  { value: "re_event", label: "재행사", description: "재행사 할인 (70% 할인)", color: "teal" },
+  { value: "sale", label: "판매", description: "프로그램 판매 (30% 추가)", color: "orange" },
+];
+
 const KSNET_PRICE = 300000;
 const SELECT_PRINT_PRICE = 150000;
 
@@ -87,6 +95,7 @@ export default function RequestPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [form, setForm] = useState({
+    quoteType: "rental" as QuoteType,
     eventName: "",
     eventDate: "",
     eventEndDate: "",
@@ -128,12 +137,13 @@ export default function RequestPage() {
       });
   }, []);
 
+  const priceRate = TYPE_PRICE_RATE[form.quoteType];
   const selectedModuleData = modules.filter(
     (m) => form.selectedModules.includes(m.code) || m.isAutoIncluded
   );
-  const ksnetExtra = form.useKsnetPayment ? KSNET_PRICE : 0;
-  const selectPrintExtra = form.screenComposition.includes("select_print") ? SELECT_PRINT_PRICE : 0;
-  const subtotal = selectedModuleData.reduce((s, m) => s + m.basePrice, 0) + ksnetExtra + selectPrintExtra;
+  const ksnetExtra = form.useKsnetPayment ? applyPriceRate(KSNET_PRICE, priceRate) : 0;
+  const selectPrintExtra = form.screenComposition.includes("select_print") ? applyPriceRate(SELECT_PRINT_PRICE, priceRate) : 0;
+  const subtotal = selectedModuleData.reduce((s, m) => s + applyPriceRate(m.basePrice, priceRate), 0) + ksnetExtra + selectPrintExtra;
   const vat = Math.round(subtotal * 0.1);
   const total = subtotal + vat;
 
@@ -212,7 +222,7 @@ export default function RequestPage() {
       const res = await fetch("/api/quotes", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...form, type: "rental", attachments }),
+        body: JSON.stringify({ ...form, type: form.quoteType, attachments }),
       });
       if (!res.ok) {
         const err = await res.json();
@@ -230,7 +240,7 @@ export default function RequestPage() {
   }
 
   const canProceed = () => {
-    if (step === 0) return form.eventName && form.requesterName;
+    if (step === 0) return form.quoteType && form.eventName && form.requesterName;
     if (step === 1) return form.selectedModules.length > 0;
     return true;
   };
@@ -261,12 +271,12 @@ export default function RequestPage() {
                 setSubmitted(false);
                 setStep(0);
                 setForm({
-                  eventName: "", eventDate: "", eventEndDate: "", venue: "",
-                  deadline: "", expectedVisitors: "", requesterName: user?.name || "",
-                  requesterContact: "", requesterEmail: "", screenDevice: "",
-                  screenResolution: "", printerType: "", networkType: "",
-                  printSize: "", notes: "", selectedModules: [],
-                  screenComposition: [], useDbLogging: false,
+                  quoteType: "rental", eventName: "", eventDate: "", eventEndDate: "",
+                  venue: "", deadline: "", expectedVisitors: "",
+                  requesterName: user?.name || "", requesterContact: "",
+                  requesterEmail: "", screenDevice: "", screenResolution: "",
+                  printerType: "", networkType: "", printSize: "", notes: "",
+                  selectedModules: [], screenComposition: [], useDbLogging: false,
                   useKsnetPayment: false, ksnetMerchantId: "",
                 });
                 setAttachments([]);
@@ -328,6 +338,47 @@ export default function RequestPage() {
           {step === 0 && (
             <div className="space-y-5">
               <h2 className="text-xl font-semibold mb-6">기본 정보</h2>
+
+              {/* 견적 유형 선택 */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  견적 유형 <span className="text-red-500">*</span>
+                </label>
+                <div className="grid grid-cols-3 gap-3">
+                  {QUOTE_TYPES.map((qt) => {
+                    const isSelected = form.quoteType === qt.value;
+                    const colorMap: Record<string, { border: string; bg: string; text: string; ring: string }> = {
+                      blue: { border: "border-blue-500", bg: "bg-blue-50", text: "text-blue-700", ring: "ring-blue-200" },
+                      teal: { border: "border-teal-500", bg: "bg-teal-50", text: "text-teal-700", ring: "ring-teal-200" },
+                      orange: { border: "border-orange-500", bg: "bg-orange-50", text: "text-orange-700", ring: "ring-orange-200" },
+                    };
+                    const c = colorMap[qt.color];
+                    return (
+                      <button
+                        key={qt.value}
+                        type="button"
+                        onClick={() => setForm((prev) => ({ ...prev, quoteType: qt.value }))}
+                        className={`p-3 rounded-xl border-2 text-center transition-all ${
+                          isSelected
+                            ? `${c.border} ${c.bg} ring-2 ${c.ring}`
+                            : "border-gray-200 hover:border-gray-300 bg-white"
+                        }`}
+                      >
+                        <div className={`text-sm font-semibold ${isSelected ? c.text : "text-gray-700"}`}>
+                          {qt.label}
+                        </div>
+                        <div className="text-xs text-gray-500 mt-0.5">{qt.description}</div>
+                      </button>
+                    );
+                  })}
+                </div>
+                {form.quoteType === "sale" && (
+                  <p className="text-xs text-orange-600 mt-2">
+                    * 판매 견적은 개발팀 협의가 필요할 수 있습니다
+                  </p>
+                )}
+              </div>
+
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1.5">
                   행사명 <span className="text-red-500">*</span>
@@ -433,7 +484,18 @@ export default function RequestPage() {
           {/* Step 1: 기능 선택 */}
           {step === 1 && (
             <div>
-              <h2 className="text-xl font-semibold mb-2">단가표</h2>
+              <div className="flex items-center justify-between mb-2">
+                <h2 className="text-xl font-semibold">단가표</h2>
+                <span className={`text-xs px-2.5 py-1 rounded-full font-medium ${
+                  form.quoteType === "sale" ? "bg-orange-100 text-orange-700" :
+                  form.quoteType === "re_event" ? "bg-teal-100 text-teal-700" :
+                  "bg-blue-100 text-blue-700"
+                }`}>
+                  {TYPE_LABELS[form.quoteType]}
+                  {form.quoteType === "re_event" && " (70% 할인)"}
+                  {form.quoteType === "sale" && " (+30%)"}
+                </span>
+              </div>
               <p className="text-sm text-gray-500 mb-6">
                 필요한 기능을 선택해주세요. 테스트 및 유지보수는 자동 포함됩니다.
               </p>
@@ -475,7 +537,7 @@ export default function RequestPage() {
                             )}
                           </div>
                           <span className={`text-sm font-semibold shrink-0 ml-4 ${isNegotiable ? "text-orange-600" : "text-blue-600"}`}>
-                            {isNegotiable ? "협의" : `${formatKRW(mod.basePrice)}원`}
+                            {isNegotiable ? "협의" : `${formatKRW(applyPriceRate(mod.basePrice, priceRate))}원`}
                           </span>
                         </div>
                       </button>
@@ -502,7 +564,7 @@ export default function RequestPage() {
                           </span>
                         </div>
                         <span className="text-sm font-semibold text-green-600">
-                          {formatKRW(mod.basePrice)}원
+                          {formatKRW(applyPriceRate(mod.basePrice, priceRate))}원
                         </span>
                       </div>
                     </div>
@@ -613,7 +675,7 @@ export default function RequestPage() {
                       </p>
                       {form.screenComposition.includes("select_print") && (
                         <p className="text-xs text-purple-600 mt-1">
-                          * 선택 인쇄 기능 포함 (+{formatKRW(SELECT_PRINT_PRICE)}원)
+                          * 선택 인쇄 기능 포함 (+{formatKRW(applyPriceRate(SELECT_PRINT_PRICE, priceRate))}원)
                         </p>
                       )}
                     </div>
@@ -749,7 +811,7 @@ export default function RequestPage() {
                             </p>
                           </div>
                           <span className="text-sm font-semibold text-purple-600 shrink-0 ml-4">
-                            {formatKRW(KSNET_PRICE)}원
+                            {formatKRW(applyPriceRate(KSNET_PRICE, priceRate))}원
                           </span>
                         </div>
                       </button>
@@ -854,7 +916,16 @@ export default function RequestPage() {
           {/* Step 3: 미리보기 */}
           {step === 3 && (
             <div>
-              <h2 className="text-xl font-semibold mb-6">견적 미리보기</h2>
+              <div className="flex items-center justify-between mb-6">
+                <h2 className="text-xl font-semibold">견적 미리보기</h2>
+                <span className={`text-xs px-2.5 py-1 rounded-full font-medium ${
+                  form.quoteType === "sale" ? "bg-orange-100 text-orange-700" :
+                  form.quoteType === "re_event" ? "bg-teal-100 text-teal-700" :
+                  "bg-blue-100 text-blue-700"
+                }`}>
+                  {TYPE_LABELS[form.quoteType]}
+                </span>
+              </div>
 
               <div className="space-y-4">
                 <div className="p-4 bg-gray-50 rounded-xl">
@@ -916,7 +987,7 @@ export default function RequestPage() {
                             {mod.code === "AI_STYLE" && mod.basePrice === 0 ? (
                               <span className="text-orange-600 font-medium">협의</span>
                             ) : (
-                              `${formatKRW(mod.basePrice)}원`
+                              `${formatKRW(applyPriceRate(mod.basePrice, priceRate))}원`
                             )}
                           </td>
                         </tr>
@@ -924,7 +995,7 @@ export default function RequestPage() {
                       {form.screenComposition.includes("select_print") && (
                         <tr className="border-b border-gray-100">
                           <td className="py-2">선택 인쇄 기능</td>
-                          <td className="py-2 text-right">{formatKRW(SELECT_PRINT_PRICE)}원</td>
+                          <td className="py-2 text-right">{formatKRW(applyPriceRate(SELECT_PRINT_PRICE, priceRate))}원</td>
                         </tr>
                       )}
                       {form.useKsnetPayment && (
@@ -937,7 +1008,7 @@ export default function RequestPage() {
                               </span>
                             )}
                           </td>
-                          <td className="py-2 text-right">{formatKRW(KSNET_PRICE)}원</td>
+                          <td className="py-2 text-right">{formatKRW(applyPriceRate(KSNET_PRICE, priceRate))}원</td>
                         </tr>
                       )}
                     </tbody>
