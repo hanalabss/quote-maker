@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { Clock, CheckCircle, XCircle, Eye, Search, FileSpreadsheet } from "lucide-react";
+import { useAuth } from "@/components/AuthProvider";
 import { formatKRW } from "@/lib/pricing";
 import type { QuoteStatus, QuoteType } from "@/types";
 import { STATUS_LABELS, STATUS_COLORS, TYPE_LABELS, TYPE_COLORS } from "@/types";
@@ -27,25 +28,12 @@ const FILTERS: { value: string; label: string }[] = [
   { value: "rejected", label: "반려" },
 ];
 
-interface AuthUser {
-  id: string;
-  loginId: string;
-  name: string;
-  role: string;
-}
-
 export default function QuotesPage() {
   const [quotes, setQuotes] = useState<QuoteListItem[]>([]);
   const [filter, setFilter] = useState("");
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
-  const [user, setUser] = useState<AuthUser | null>(null);
-
-  useEffect(() => {
-    fetch("/api/auth/me")
-      .then((r) => (r.ok ? r.json() : null))
-      .then(setUser);
-  }, []);
+  const { user } = useAuth();
 
   useEffect(() => {
     setLoading(true);

@@ -2,6 +2,7 @@
 
 import { useState, useEffect, use } from "react";
 import Link from "next/link";
+import { useAuth } from "@/components/AuthProvider";
 import {
   ArrowLeft,
   CheckCircle,
@@ -80,7 +81,7 @@ export default function QuoteDetailPage({
   const [rejectionReason, setRejectionReason] = useState("");
   const [showRejectModal, setShowRejectModal] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [userRole, setUserRole] = useState<string>("");
+  const { isDev } = useAuth();
 
   useEffect(() => {
     fetch(`/api/quotes/${id}`)
@@ -91,11 +92,6 @@ export default function QuoteDetailPage({
         setReviewNote(data.reviewNote || "");
         setLoading(false);
       });
-    // 현재 유저 role 확인
-    fetch("/api/auth/me")
-      .then((r) => r.json())
-      .then((data) => { if (data.role) setUserRole(data.role); })
-      .catch(() => {});
   }, [id]);
 
 
@@ -431,7 +427,7 @@ export default function QuoteDetailPage({
           <div className="bg-white rounded-xl border p-5">
             <div className="flex items-center justify-between mb-4">
               <h3 className="font-medium">견적 항목</h3>
-              {!editing && userRole === "dev" && (quote.status === "pending" || quote.status === "reviewing") && (
+              {!editing && isDev &&(quote.status === "pending" || quote.status === "reviewing") && (
                 <button
                   onClick={() => setEditing(true)}
                   className="flex items-center gap-1 text-sm text-blue-600 hover:text-blue-800"
@@ -575,7 +571,7 @@ export default function QuoteDetailPage({
           </div>
 
           {/* 검토 메모 - dev만 */}
-          {userRole === "dev" && (quote.status === "pending" || quote.status === "reviewing") && (
+          {isDev &&(quote.status === "pending" || quote.status === "reviewing") && (
             <div className="bg-white rounded-xl border p-5">
               <h3 className="font-medium mb-3">검토 메모</h3>
               <textarea
@@ -605,7 +601,7 @@ export default function QuoteDetailPage({
           )}
 
           {/* 액션 버튼 - dev만 */}
-          {userRole === "dev" && (quote.status === "pending" || quote.status === "reviewing") && (
+          {isDev &&(quote.status === "pending" || quote.status === "reviewing") && (
             <div className="flex flex-wrap gap-2 sm:gap-3">
               {quote.status === "pending" && (
                 <button
