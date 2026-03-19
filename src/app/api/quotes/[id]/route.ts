@@ -1,5 +1,17 @@
 import { NextRequest, NextResponse } from "next/server";
+import { cookies } from "next/headers";
 import { prisma } from "@/lib/db";
+
+async function getAuthUser() {
+  const c = await cookies();
+  const raw = c.get("auth-user")?.value;
+  if (!raw) return null;
+  try {
+    return JSON.parse(raw) as { id: string; loginId: string; name: string; role: string };
+  } catch {
+    return null;
+  }
+}
 
 export async function GET(
   request: NextRequest,
@@ -37,7 +49,33 @@ export async function PATCH(
 
   // 상태 변경
   if (body.status) {
-    const updateData: Record<string, unknown> = { status: body.status };
+    // dev role만 상태 변경 가능
+    const user = await getAuthUser();
+    if (!user || user.role !== "dev") {
+      return NextResponse.json(
+        { error: "권한이 없습니다. 개발팀 관리자만 상태를 변경할 수 있습니다." },
+        { status: 403 }
+      );
+    }
+
+    // 상태 전이 규칙 검증
+    const validTransitions: Record<string, string[]> = {
+      pending: ["reviewing"],
+      reviewing: ["approved", "rejected"],
+      rejected: ["pending"],
+    };
+    const allowed = validTransitions[quote.status];
+    if (!allowed || !allowed.includes(body.status)) {
+      return NextResponse.json(
+        { error: `현재 상태(${quote.status})에서 ${body.status}(으)로 변경할 수 없습니다.` },
+        { status: 400 }
+      );
+    }
+
+    const updateData: Record<string, unknown> = {
+      status: body.status,
+      reviewedById: user.id,
+    };
     if (body.status === "rejected" && body.rejectionReason) {
       updateData.rejectionReason = body.rejectionReason;
     }
