@@ -19,6 +19,7 @@ export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  try {
   const user = await getAuthUser();
   if (!user) {
     return NextResponse.json({ error: "로그인이 필요합니다" }, { status: 401 });
@@ -335,4 +336,8 @@ export async function GET(
   headers.set("Pragma", "no-cache");
 
   return new Response(uint8, { status: 200, headers });
+  } catch (error) {
+    console.error("Excel 생성 오류:", error);
+    return NextResponse.json({ error: "Excel 파일 생성 중 오류가 발생했습니다" }, { status: 500 });
+  }
 }

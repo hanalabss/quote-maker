@@ -88,6 +88,10 @@ model Quote {
 
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
+
+  @@index([status])
+  @@index([createdById])
+  @@index([createdAt])
 }
 
 model QuoteItem {
@@ -107,4 +111,6 @@ model QuoteItem {
 
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+
+  @@index([quoteId])
 }

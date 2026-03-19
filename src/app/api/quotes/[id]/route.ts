@@ -38,6 +38,7 @@ export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  try {
   // dev role만 수정 가능
   const authResult = await requireDev();
   if ("error" in authResult) {
@@ -133,4 +134,8 @@ export async function PATCH(
   }
 
   return NextResponse.json({ error: "수정할 내용이 없습니다" }, { status: 400 });
+  } catch (error) {
+    console.error("견적 수정 오류:", error);
+    return NextResponse.json({ error: "견적 수정 중 오류가 발생했습니다" }, { status: 500 });
+  }
 }

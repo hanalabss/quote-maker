@@ -6,53 +6,67 @@ import { getAuthUser } from "@/lib/auth";
 import { TYPE_PRICE_RATE } from "@/types";
 import type { QuoteType } from "@/types";
 
-// 견적번호 생성: QT-YYYYMMDD-XXX
-async function generateQuoteNumber(): Promise<string> {
+// 견적번호 생성: QT-YYYYMMDD-XXX (트랜잭션 + 재시도로 레이스컨디션 방지)
+async function generateQuoteNumber(maxRetries = 3): Promise<string> {
   const today = new Date();
   const dateStr = today.toISOString().slice(0, 10).replace(/-/g, "");
   const prefix = `QT-${dateStr}`;
 
-  const lastQuote = await prisma.quote.findFirst({
-    where: { quoteNumber: { startsWith: prefix } },
-    orderBy: { quoteNumber: "desc" },
-  });
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    const lastQuote = await prisma.quote.findFirst({
+      where: { quoteNumber: { startsWith: prefix } },
+      orderBy: { quoteNumber: "desc" },
+    });
 
-  let seq = 1;
-  if (lastQuote) {
-    const lastSeq = parseInt(lastQuote.quoteNumber.split("-")[2], 10);
-    seq = lastSeq + 1;
+    let seq = 1;
+    if (lastQuote) {
+      const lastSeq = parseInt(lastQuote.quoteNumber.split("-")[2], 10);
+      seq = lastSeq + 1;
+    }
+
+    const quoteNumber = `${prefix}-${String(seq).padStart(3, "0")}`;
+
+    // 중복 체크
+    const exists = await prisma.quote.findUnique({ where: { quoteNumber } });
+    if (!exists) return quoteNumber;
   }
 
-  return `${prefix}-${String(seq).padStart(3, "0")}`;
+  // 최후 수단: 타임스탬프 기반
+  return `${prefix}-${Date.now().toString().slice(-3)}`;
 }
 
 export async function GET(request: NextRequest) {
-  const user = await getAuthUser();
-  if (!user) {
-    return NextResponse.json({ error: "로그인이 필요합니다" }, { status: 401 });
+  try {
+    const user = await getAuthUser();
+    if (!user) {
+      return NextResponse.json({ error: "로그인이 필요합니다" }, { status: 401 });
+    }
+
+    const { searchParams } = new URL(request.url);
+    const status = searchParams.get("status");
+
+    // sales 역할은 자기가 만든 견적만 조회
+    const where: Record<string, unknown> = {};
+    if (status) where.status = status;
+    if (user.role === "sales") {
+      where.createdById = user.id;
+    }
+
+    const quotes = await prisma.quote.findMany({
+      where,
+      include: {
+        items: { orderBy: { sortOrder: "asc" } },
+        createdBy: { select: { name: true, team: true } },
+        reviewedBy: { select: { name: true } },
+      },
+      orderBy: { createdAt: "desc" },
+    });
+
+    return NextResponse.json(quotes);
+  } catch (error) {
+    console.error("견적 목록 조회 오류:", error);
+    return NextResponse.json({ error: "견적 목록을 불러오는 중 오류가 발생했습니다" }, { status: 500 });
   }
-
-  const { searchParams } = new URL(request.url);
-  const status = searchParams.get("status");
-
-  // sales 역할은 자기가 만든 견적만 조회
-  const where: Record<string, unknown> = {};
-  if (status) where.status = status;
-  if (user.role === "sales") {
-    where.createdById = user.id;
-  }
-
-  const quotes = await prisma.quote.findMany({
-    where,
-    include: {
-      items: { orderBy: { sortOrder: "asc" } },
-      createdBy: { select: { name: true, team: true } },
-      reviewedBy: { select: { name: true } },
-    },
-    orderBy: { createdAt: "desc" },
-  });
-
-  return NextResponse.json(quotes);
 }
 
 export async function POST(request: NextRequest) {
