@@ -1,4 +1,5 @@
 import { PrismaClient } from "@prisma/client";
+import bcrypt from "bcryptjs";
 
 const prisma = new PrismaClient();
 
@@ -108,15 +109,17 @@ async function main() {
 
   console.log(`✅ ${modules.length}개 모듈 시드 완료`);
 
-  // 기본 사용자
-  const users = [
+  // 기본 사용자 (비밀번호 bcrypt 해싱)
+  const usersRaw = [
     { loginId: "admin", password: "admin", name: "관리자", email: "dev@hanapf.kr", role: "dev", team: "개발팀", position: null },
     { loginId: "jdy", password: "1234", name: "정두용", email: "jdy@hanapf.kr", role: "sales", team: "사업팀", position: "팀장" },
     { loginId: "cmb", password: "1234", name: "채민병", email: "cmb@hanapf.kr", role: "sales", team: "사업팀", position: "대리" },
     { loginId: "kjn", password: "1234", name: "김정남", email: "kjn@hanapf.kr", role: "sales", team: "사업팀", position: "이사" },
   ];
 
-  for (const user of users) {
+  for (const raw of usersRaw) {
+    const hashedPassword = await bcrypt.hash(raw.password, 12);
+    const user = { ...raw, password: hashedPassword };
     await prisma.user.upsert({
       where: { email: user.email },
       update: user,
@@ -124,7 +127,7 @@ async function main() {
     });
   }
 
-  console.log(`✅ ${users.length}명 사용자 시드 완료`);
+  console.log(`✅ ${usersRaw.length}명 사용자 시드 완료`);
 }
 
 main()

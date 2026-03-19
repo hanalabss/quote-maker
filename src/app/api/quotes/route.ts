@@ -1,23 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
-import { cookies } from "next/headers";
 import { prisma } from "@/lib/db";
 import { calculateQuote } from "@/lib/pricing";
 import { sendQuoteNotification } from "@/lib/email";
+import { getAuthUser } from "@/lib/auth";
 import { TYPE_PRICE_RATE } from "@/types";
 import type { QuoteType } from "@/types";
-
-function getAuthUser() {
-  // Note: cookies() is async in Next.js 14+ but we call it at request time
-  return cookies().then((c) => {
-    const raw = c.get("auth-user")?.value;
-    if (!raw) return null;
-    try {
-      return JSON.parse(raw) as { id: string; loginId: string; name: string; role: string };
-    } catch {
-      return null;
-    }
-  });
-}
 
 // 견적번호 생성: QT-YYYYMMDD-XXX
 async function generateQuoteNumber(): Promise<string> {
@@ -40,15 +27,18 @@ async function generateQuoteNumber(): Promise<string> {
 }
 
 export async function GET(request: NextRequest) {
+  const user = await getAuthUser();
+  if (!user) {
+    return NextResponse.json({ error: "로그인이 필요합니다" }, { status: 401 });
+  }
+
   const { searchParams } = new URL(request.url);
   const status = searchParams.get("status");
-
-  const user = await getAuthUser();
 
   // sales 역할은 자기가 만든 견적만 조회
   const where: Record<string, unknown> = {};
   if (status) where.status = status;
-  if (user && user.role === "sales") {
+  if (user.role === "sales") {
     where.createdById = user.id;
   }
 

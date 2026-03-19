@@ -1,18 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { prisma } from "@/lib/db";
-
-function getAuthUser() {
-  return cookies().then((c) => {
-    const raw = c.get("auth-user")?.value;
-    if (!raw) return null;
-    try {
-      return JSON.parse(raw) as { id: string; loginId: string; name: string; role: string; team: string | null; position: string | null };
-    } catch {
-      return null;
-    }
-  });
-}
+import { getAuthUser } from "@/lib/auth";
+import bcrypt from "bcryptjs";
 
 // 프로필 조회 (DB에서 최신 정보)
 export async function GET() {
@@ -68,9 +58,9 @@ export async function PATCH(request: NextRequest) {
       position: position?.trim() || null,
     };
 
-    // 비밀번호 변경 (입력한 경우만)
+    // 비밀번호 변경 (입력한 경우만) - bcrypt 해싱
     if (password?.trim()) {
-      updateData.password = password.trim();
+      updateData.password = await bcrypt.hash(password.trim(), 12);
     }
 
     const updated = await prisma.user.update({
@@ -99,6 +89,7 @@ export async function PATCH(request: NextRequest) {
       position: updated.position,
     }), {
       httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
       path: "/",
       maxAge: 60 * 60 * 24 * 7,
       sameSite: "lax",

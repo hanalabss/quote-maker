@@ -1,22 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
-import { cookies } from "next/headers";
 import { prisma } from "@/lib/db";
-
-async function getAuthUser() {
-  const c = await cookies();
-  const raw = c.get("auth-user")?.value;
-  if (!raw) return null;
-  try {
-    return JSON.parse(raw) as { id: string; loginId: string; name: string; role: string };
-  } catch {
-    return null;
-  }
-}
+import { getAuthUser, requireDev } from "@/lib/auth";
 
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const user = await getAuthUser();
+  if (!user) {
+    return NextResponse.json({ error: "로그인이 필요합니다" }, { status: 401 });
+  }
+
   const { id } = await params;
 
   const quote = await prisma.quote.findUnique({
@@ -32,6 +26,11 @@ export async function GET(
     return NextResponse.json({ error: "견적을 찾을 수 없습니다" }, { status: 404 });
   }
 
+  // sales는 자기 견적만 조회 가능
+  if (user.role === "sales" && quote.createdById !== user.id) {
+    return NextResponse.json({ error: "권한이 없습니다" }, { status: 403 });
+  }
+
   return NextResponse.json(quote);
 }
 
@@ -39,6 +38,13 @@ export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  // dev role만 수정 가능
+  const authResult = await requireDev();
+  if ("error" in authResult) {
+    return NextResponse.json({ error: authResult.error }, { status: authResult.status });
+  }
+  const user = authResult.user;
+
   const { id } = await params;
   const body = await request.json();
 
@@ -49,15 +55,6 @@ export async function PATCH(
 
   // 상태 변경
   if (body.status) {
-    // dev role만 상태 변경 가능
-    const user = await getAuthUser();
-    if (!user || user.role !== "dev") {
-      return NextResponse.json(
-        { error: "권한이 없습니다. 개발팀 관리자만 상태를 변경할 수 있습니다." },
-        { status: 403 }
-      );
-    }
-
     // 상태 전이 규칙 검증
     const validTransitions: Record<string, string[]> = {
       pending: ["reviewing"],

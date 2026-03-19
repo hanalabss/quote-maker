@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
+import { getAuthUser } from "@/lib/auth";
 import ExcelJS from "exceljs";
 import { amountToKorean, formatKRW } from "@/lib/pricing";
 import { TYPE_LABELS } from "@/types";
@@ -18,6 +19,11 @@ export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const user = await getAuthUser();
+  if (!user) {
+    return NextResponse.json({ error: "로그인이 필요합니다" }, { status: 401 });
+  }
+
   const { id } = await params;
 
   const quote = await prisma.quote.findUnique({

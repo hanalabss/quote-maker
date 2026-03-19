@@ -1,22 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
-import { cookies } from "next/headers";
 import { prisma } from "@/lib/db";
+import { requireDev } from "@/lib/auth";
 
 export async function PATCH(request: NextRequest) {
-  // dev 권한 체크
-  const cookieStore = await cookies();
-  const raw = cookieStore.get("auth-user")?.value;
-  if (!raw) {
-    return NextResponse.json({ error: "인증 필요" }, { status: 401 });
-  }
-
-  try {
-    const user = JSON.parse(raw);
-    if (user.role !== "dev") {
-      return NextResponse.json({ error: "권한 없음" }, { status: 403 });
-    }
-  } catch {
-    return NextResponse.json({ error: "인증 오류" }, { status: 401 });
+  const authResult = await requireDev();
+  if ("error" in authResult) {
+    return NextResponse.json({ error: authResult.error }, { status: authResult.status });
   }
 
   const { orders } = await request.json();
@@ -24,8 +13,8 @@ export async function PATCH(request: NextRequest) {
     return NextResponse.json({ error: "orders 배열이 필요합니다" }, { status: 400 });
   }
 
-  // 각 모듈의 sortOrder 일괄 업데이트
-  await Promise.all(
+  // 트랜잭션으로 일괄 업데이트
+  await prisma.$transaction(
     orders.map((item: { id: string; sortOrder: number }) =>
       prisma.module.update({
         where: { id: item.id },
