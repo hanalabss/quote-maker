@@ -1,44 +1,24 @@
-"use client";
-
-import { useState, useEffect } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { FileText, ClipboardList, LogOut, DollarSign, Settings } from "lucide-react";
+import { cookies } from "next/headers";
+import { FileText, ClipboardList, DollarSign, Settings } from "lucide-react";
+import { LogoutButton } from "@/components/LogoutButton";
 
 interface AuthUser {
   id: string;
-  loginId: string;
   name: string;
   role: string;
   team: string | null;
   position: string | null;
 }
 
-export default function HomePage() {
-  const router = useRouter();
-  const [user, setUser] = useState<AuthUser | null>(null);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    fetch("/api/auth/me")
-      .then((r) => (r.ok ? r.json() : null))
-      .then((data) => {
-        setUser(data);
-        setLoading(false);
-      });
-  }, []);
-
-  async function handleLogout() {
-    await fetch("/api/auth/logout", { method: "POST" });
-    router.push("/login");
-  }
-
-  if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <p className="text-gray-400">로딩 중...</p>
-      </div>
-    );
+export default async function HomePage() {
+  const cookieStore = await cookies();
+  const authCookie = cookieStore.get("auth-user");
+  let user: AuthUser | null = null;
+  if (authCookie) {
+    try {
+      user = JSON.parse(authCookie.value);
+    } catch {}
   }
 
   const isDev = user?.role === "dev";
@@ -47,29 +27,25 @@ export default function HomePage() {
     <div className="min-h-screen flex items-center justify-center p-4">
       <div className="max-w-4xl w-full">
         {/* 사용자 정보 + 로그아웃 */}
-        <div className="flex justify-end mb-4">
-          <div className="flex items-center gap-3">
-            <span className="text-sm text-gray-500">
-              <span className="font-medium text-gray-900">{user?.name}</span>
-              {user?.position && <span className="text-gray-400"> {user.position}</span>}
-              {user?.team && <span className="text-gray-400"> · {user.team}</span>}
-            </span>
-            <Link
-              href="/dashboard/profile"
-              className="flex items-center gap-1 text-sm text-gray-400 hover:text-blue-600 transition-colors"
-            >
-              <Settings className="w-4 h-4" />
-              정보 수정
-            </Link>
-            <button
-              onClick={handleLogout}
-              className="flex items-center gap-1 text-sm text-gray-400 hover:text-red-500 transition-colors"
-            >
-              <LogOut className="w-4 h-4" />
-              로그아웃
-            </button>
+        {user && (
+          <div className="flex justify-end mb-4">
+            <div className="flex items-center gap-3">
+              <span className="text-sm text-gray-500">
+                <span className="font-medium text-gray-900">{user.name}</span>
+                {user.position && <span className="text-gray-400"> {user.position}</span>}
+                {user.team && <span className="text-gray-400"> · {user.team}</span>}
+              </span>
+              <Link
+                href="/dashboard/profile"
+                className="flex items-center gap-1 text-sm text-gray-400 hover:text-blue-600 transition-colors"
+              >
+                <Settings className="w-4 h-4" />
+                정보 수정
+              </Link>
+              <LogoutButton />
+            </div>
           </div>
-        </div>
+        )}
 
         <div className="text-center mb-8 sm:mb-12">
           <h1 className="text-2xl sm:text-4xl font-bold text-gray-900 mb-3">QuoteMaker</h1>
@@ -124,7 +100,6 @@ export default function HomePage() {
             </p>
           </Link>
         </div>
-
       </div>
     </div>
   );

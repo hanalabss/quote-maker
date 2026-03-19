@@ -6,5 +6,10 @@ export async function GET() {
     where: { isActive: true },
     orderBy: { sortOrder: "asc" },
   });
-  return NextResponse.json(modules);
+
+  return NextResponse.json(modules, {
+    headers: {
+      "Cache-Control": "private, max-age=60, stale-while-revalidate=120",
+    },
+  });
 }

@@ -1,6 +1,7 @@
 import { cookies } from "next/headers";
 import { DashboardShell } from "./DashboardShell";
 import { AuthProvider } from "@/components/AuthProvider";
+import type { AuthUser } from "@/components/AuthProvider";
 
 export default async function DashboardLayout({
   children,
@@ -9,17 +10,18 @@ export default async function DashboardLayout({
 }) {
   const cookieStore = await cookies();
   const authCookie = cookieStore.get("auth-user");
-  let isDev = false;
+  let initialUser: AuthUser | null = null;
   if (authCookie) {
     try {
-      const user = JSON.parse(authCookie.value);
-      isDev = user.role === "dev";
+      initialUser = JSON.parse(authCookie.value);
     } catch {}
   }
 
+  const isDev = initialUser?.role === "dev";
+
   return (
-    <AuthProvider>
-      <DashboardShell isDev={isDev}>{children}</DashboardShell>
+    <AuthProvider initialUser={initialUser}>
+      <DashboardShell isDev={isDev ?? false}>{children}</DashboardShell>
     </AuthProvider>
   );
 }

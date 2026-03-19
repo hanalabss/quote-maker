@@ -2,7 +2,7 @@
 
 import { createContext, useContext, useState, useEffect, ReactNode } from "react";
 
-interface AuthUser {
+export interface AuthUser {
   id: string;
   loginId: string;
   name: string;
@@ -25,9 +25,15 @@ const AuthContext = createContext<AuthContextType>({
   refresh: () => {},
 });
 
-export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<AuthUser | null>(null);
-  const [loading, setLoading] = useState(true);
+export function AuthProvider({
+  children,
+  initialUser,
+}: {
+  children: ReactNode;
+  initialUser?: AuthUser | null;
+}) {
+  const [user, setUser] = useState<AuthUser | null>(initialUser ?? null);
+  const [loading, setLoading] = useState(!initialUser);
 
   function fetchUser() {
     fetch("/api/auth/me")
@@ -40,8 +46,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   useEffect(() => {
+    // 초기값이 있으면 API 호출 불필요
+    if (initialUser) return;
     fetchUser();
-  }, []);
+  }, [initialUser]);
 
   return (
     <AuthContext.Provider value={{ user, loading, isDev: user?.role === "dev", refresh: fetchUser }}>

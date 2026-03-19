@@ -1,26 +1,10 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
+import dynamic from "next/dynamic";
 import { formatKRW } from "@/lib/pricing";
-import { GripVertical, Save, Loader2 } from "lucide-react";
-import {
-  DndContext,
-  closestCenter,
-  KeyboardSensor,
-  PointerSensor,
-  useSensor,
-  useSensors,
-  type DragEndEvent,
-} from "@dnd-kit/core";
-import {
-  arrayMove,
-  SortableContext,
-  sortableKeyboardCoordinates,
-  useSortable,
-  verticalListSortingStrategy,
-} from "@dnd-kit/sortable";
-import { CSS } from "@dnd-kit/utilities";
+import { Save, Loader2 } from "lucide-react";
+import { useAuth } from "@/components/AuthProvider";
 
 interface Module {
   id: string;
@@ -44,6 +28,12 @@ const CATEGORY_LABELS: Record<string, string> = {
   payment: "결제",
   etc: "기타",
 };
+
+// dnd-kit을 사용하는 테이블은 dev만 로드
+const SortableModuleTable = dynamic(() => import("./SortableModuleTable"), {
+  ssr: false,
+  loading: () => <div className="p-8 text-center text-gray-400">로딩 중...</div>,
+});
 
 function ReadOnlyRow({ mod, index }: { mod: Module; index: number }) {
   return (
@@ -77,124 +67,34 @@ function ReadOnlyRow({ mod, index }: { mod: Module; index: number }) {
   );
 }
 
-function SortableRow({ mod, index }: { mod: Module; index: number }) {
-  const {
-    attributes,
-    listeners,
-    setNodeRef,
-    transform,
-    transition,
-    isDragging,
-  } = useSortable({ id: mod.id });
-
-  const style = {
-    transform: CSS.Transform.toString(transform),
-    transition,
-    zIndex: isDragging ? 10 : undefined,
-    position: isDragging ? "relative" as const : undefined,
-  };
-
-  return (
-    <tr
-      ref={setNodeRef}
-      style={style}
-      className={`${isDragging ? "bg-blue-50 shadow-lg" : "hover:bg-gray-50"}`}
-    >
-      <td className="px-2 py-3 w-10">
-        <button
-          {...attributes}
-          {...listeners}
-          className="p-2 text-gray-400 hover:text-gray-600 cursor-grab active:cursor-grabbing"
-        >
-          <GripVertical className="w-4 h-4" />
-        </button>
-      </td>
-      <td className="px-3 sm:px-4 py-3 text-sm text-gray-400 w-12">{index + 1}</td>
-      <td className="px-3 sm:px-4 py-3 text-sm font-mono text-gray-600 hidden sm:table-cell">{mod.code}</td>
-      <td className="px-3 sm:px-4 py-3">
-        <div className="text-sm font-medium">{mod.name}</div>
-        {mod.description && (
-          <div className="text-xs text-gray-500 mt-0.5">{mod.description}</div>
-        )}
-      </td>
-      <td className="px-3 sm:px-4 py-3 text-sm text-gray-500 hidden md:table-cell">
-        {CATEGORY_LABELS[mod.category] || mod.category}
-      </td>
-      <td className="px-3 sm:px-4 py-3 text-sm text-right font-medium whitespace-nowrap">
-        {mod.basePrice === 0 && mod.code === "AI_STYLE" ? (
-          <span className="text-orange-600">협의</span>
-        ) : (
-          `${formatKRW(mod.basePrice)}원`
-        )}
-      </td>
-      <td className="px-3 sm:px-4 py-3 text-center">
-        {mod.isAutoIncluded && (
-          <span className="inline-block px-2 py-0.5 bg-green-100 text-green-700 text-xs rounded-full">
-            자동
-          </span>
-        )}
-      </td>
-    </tr>
-  );
-}
-
 export default function ModulesPage() {
-  const router = useRouter();
+  const { isDev, loading: authLoading } = useAuth();
   const [modules, setModules] = useState<Module[]>([]);
   const [originalOrder, setOriginalOrder] = useState<string[]>([]);
-  const [authorized, setAuthorized] = useState(false);
-  const [isDev, setIsDev] = useState(false);
   const [saving, setSaving] = useState(false);
-
-  const sensors = useSensors(
-    useSensor(PointerSensor),
-    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
-  );
+  const [modulesLoaded, setModulesLoaded] = useState(false);
 
   useEffect(() => {
-    fetch("/api/auth/me")
-      .then((r) => (r.ok ? r.json() : null))
-      .then((user) => {
-        if (!user) {
-          router.replace("/login");
-          return;
-        }
-        setAuthorized(true);
-        setIsDev(user.role === "dev");
-      });
-
     fetch("/api/modules")
       .then((r) => r.json())
       .then((data: Module[]) => {
         setModules(data);
         setOriginalOrder(data.map((m) => m.id));
+        setModulesLoaded(true);
       });
-  }, [router]);
+  }, []);
 
   const currentOrder = modules.map((m) => m.id);
   const hasChanges = JSON.stringify(currentOrder) !== JSON.stringify(originalOrder);
 
-  function handleDragEnd(event: DragEndEvent) {
-    const { active, over } = event;
-    if (!over || active.id === over.id) return;
-
-    setModules((prev) => {
-      const oldIndex = prev.findIndex((m) => m.id === active.id);
-      const newIndex = prev.findIndex((m) => m.id === over.id);
-      return arrayMove(prev, oldIndex, newIndex);
-    });
-  }
-
   async function handleSave() {
     setSaving(true);
     const orders = modules.map((mod, i) => ({ id: mod.id, sortOrder: i + 1 }));
-
     const res = await fetch("/api/modules/reorder", {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ orders }),
     });
-
     if (res.ok) {
       setOriginalOrder(modules.map((m) => m.id));
     } else {
@@ -203,10 +103,8 @@ export default function ModulesPage() {
     setSaving(false);
   }
 
-  if (!authorized) {
-    return (
-      <div className="p-12 text-center text-gray-400">로딩 중...</div>
-    );
+  if (authLoading || !modulesLoaded) {
+    return <div className="p-12 text-center text-gray-400">로딩 중...</div>;
   }
 
   return (
@@ -230,11 +128,7 @@ export default function ModulesPage() {
                 : "bg-gray-100 text-gray-400 cursor-not-allowed"
             }`}
           >
-            {saving ? (
-              <Loader2 className="w-4 h-4 animate-spin" />
-            ) : (
-              <Save className="w-4 h-4" />
-            )}
+            {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
             {saving ? "저장 중..." : "순서 저장"}
           </button>
         )}
@@ -242,43 +136,27 @@ export default function ModulesPage() {
 
       <div className="bg-white rounded-xl border overflow-hidden">
         <div className="overflow-x-auto">
-        <table className="w-full">
-          <thead className="bg-gray-50 border-b">
-            <tr>
-              {isDev && <th className="w-10" />}
-              <th className="text-left px-3 sm:px-4 py-3 text-xs sm:text-sm font-medium text-gray-500 w-12">#</th>
-              <th className="text-left px-3 sm:px-4 py-3 text-xs sm:text-sm font-medium text-gray-500 hidden sm:table-cell">코드</th>
-              <th className="text-left px-3 sm:px-4 py-3 text-xs sm:text-sm font-medium text-gray-500">항목명</th>
-              <th className="text-left px-3 sm:px-4 py-3 text-xs sm:text-sm font-medium text-gray-500 hidden md:table-cell">분류</th>
-              <th className="text-right px-3 sm:px-4 py-3 text-xs sm:text-sm font-medium text-gray-500 whitespace-nowrap">기본 단가</th>
-              <th className="text-center px-3 sm:px-4 py-3 text-xs sm:text-sm font-medium text-gray-500 whitespace-nowrap">자동 포함</th>
-            </tr>
-          </thead>
           {isDev ? (
-            <DndContext
-              sensors={sensors}
-              collisionDetection={closestCenter}
-              onDragEnd={handleDragEnd}
-            >
-              <SortableContext
-                items={modules.map((m) => m.id)}
-                strategy={verticalListSortingStrategy}
-              >
-                <tbody className="divide-y">
-                  {modules.map((mod, i) => (
-                    <SortableRow key={mod.id} mod={mod} index={i} />
-                  ))}
-                </tbody>
-              </SortableContext>
-            </DndContext>
+            <SortableModuleTable modules={modules} setModules={setModules} />
           ) : (
-            <tbody className="divide-y">
-              {modules.map((mod, i) => (
-                <ReadOnlyRow key={mod.id} mod={mod} index={i} />
-              ))}
-            </tbody>
+            <table className="w-full">
+              <thead className="bg-gray-50 border-b">
+                <tr>
+                  <th className="text-left px-3 sm:px-4 py-3 text-xs sm:text-sm font-medium text-gray-500 w-12">#</th>
+                  <th className="text-left px-3 sm:px-4 py-3 text-xs sm:text-sm font-medium text-gray-500 hidden sm:table-cell">코드</th>
+                  <th className="text-left px-3 sm:px-4 py-3 text-xs sm:text-sm font-medium text-gray-500">항목명</th>
+                  <th className="text-left px-3 sm:px-4 py-3 text-xs sm:text-sm font-medium text-gray-500 hidden md:table-cell">분류</th>
+                  <th className="text-right px-3 sm:px-4 py-3 text-xs sm:text-sm font-medium text-gray-500 whitespace-nowrap">기본 단가</th>
+                  <th className="text-center px-3 sm:px-4 py-3 text-xs sm:text-sm font-medium text-gray-500 whitespace-nowrap">자동 포함</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y">
+                {modules.map((mod, i) => (
+                  <ReadOnlyRow key={mod.id} mod={mod} index={i} />
+                ))}
+              </tbody>
+            </table>
           )}
-        </table>
         </div>
       </div>
     </div>
