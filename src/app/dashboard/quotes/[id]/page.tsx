@@ -85,7 +85,8 @@ export default function QuoteDetailPage({
   const [showRejectModal, setShowRejectModal] = useState(false);
   const [saving, setSaving] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
-  const { user, isDev } = useAuth();
+  const { user, isDev, isDevTeam } = useAuth();
+  const showPrice = user?.role === "dev" || user?.role === "sales";
   const router = useRouter();
 
   useEffect(() => {
@@ -555,8 +556,8 @@ export default function QuoteDetailPage({
                     <tr className="border-b">
                       <th className="text-left py-2 text-gray-500 font-medium w-8">#</th>
                       <th className="text-left py-2 text-gray-500 font-medium">항목</th>
-                      <th className="text-right py-2 text-gray-500 font-medium whitespace-nowrap">단가</th>
-                      <th className="text-right py-2 text-gray-500 font-medium whitespace-nowrap">금액</th>
+                      {showPrice && <th className="text-right py-2 text-gray-500 font-medium whitespace-nowrap">단가</th>}
+                      {showPrice && <th className="text-right py-2 text-gray-500 font-medium whitespace-nowrap">금액</th>}
                     </tr>
                   </thead>
                   <tbody>
@@ -569,11 +570,12 @@ export default function QuoteDetailPage({
                             <div className="text-xs text-gray-500">{item.description}</div>
                           )}
                         </td>
-                        <td className="py-2.5 text-right">{formatKRW(item.unitPrice)}원</td>
-                        <td className="py-2.5 text-right font-medium">{formatKRW(item.amount)}원</td>
+                        {showPrice && <td className="py-2.5 text-right">{formatKRW(item.unitPrice)}원</td>}
+                        {showPrice && <td className="py-2.5 text-right font-medium">{formatKRW(item.amount)}원</td>}
                       </tr>
                     ))}
                   </tbody>
+                  {showPrice && (
                   <tfoot>
                     <tr className="border-t">
                       <td colSpan={3} className="py-2 text-gray-500">소계</td>
@@ -590,6 +592,7 @@ export default function QuoteDetailPage({
                       </td>
                     </tr>
                   </tfoot>
+                  )}
                 </table>
                 </div>
               </>

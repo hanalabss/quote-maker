@@ -10,7 +10,7 @@ export default async function QuotesPage() {
   const where: Record<string, unknown> = {};
   if (user.role === "sales") {
     where.createdById = user.id;
-    where.isHidden = false; // sales는 숨긴 견적 제외
+    where.isHidden = false;
   }
 
   const quotes = await prisma.quote.findMany({
@@ -23,7 +23,8 @@ export default async function QuotesPage() {
     orderBy: { createdAt: "desc" },
   });
 
-  // 직렬화 (Date → string)
+  const showPrice = user.role === "dev" || user.role === "sales";
+
   const serialized = quotes.map((q) => ({
     id: q.id,
     quoteNumber: q.quoteNumber,
@@ -31,10 +32,10 @@ export default async function QuotesPage() {
     type: q.type,
     eventName: q.eventName,
     requesterName: q.requesterName,
-    totalAmount: q.totalAmount,
+    totalAmount: showPrice ? q.totalAmount : 0,
     createdAt: q.createdAt.toISOString(),
     createdBy: q.createdBy,
   }));
 
-  return <QuotesClient quotes={serialized} userRole={user.role} />;
+  return <QuotesClient quotes={serialized} userRole={user.role} showPrice={showPrice} />;
 }

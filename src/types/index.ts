@@ -1,6 +1,6 @@
 export type QuoteStatus = "draft" | "pending" | "reviewing" | "approved" | "rejected";
 export type QuoteType = "sale" | "rental" | "re_event";
-export type UserRole = "sales" | "dev";
+export type UserRole = "sales" | "dev" | "dev_staff";
 
 export interface QuoteFormData {
   type: QuoteType;

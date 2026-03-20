@@ -22,6 +22,7 @@ export default async function HomePage() {
   }
 
   const isDev = user?.role === "dev";
+  const isDevTeam = user?.role === "dev" || user?.role === "dev_staff";
 
   return (
     <div className="min-h-screen flex items-center justify-center p-4">
@@ -74,15 +75,18 @@ export default async function HomePage() {
               <ClipboardList className="w-6 h-6 text-indigo-600" />
             </div>
             <h2 className="text-xl font-semibold mb-2">
-              {isDev ? "견적 관리" : "내 견적 현황"}
+              {isDevTeam ? "견적 관리" : "내 견적 현황"}
             </h2>
             <p className="text-gray-500">
               {isDev
                 ? "견적 요청을 검토하고 승인/수정합니다"
+                : isDevTeam
+                ? "접수된 견적의 행사/장비 정보를 확인합니다"
                 : "내가 신청한 견적서의 상태를 확인합니다"}
             </p>
           </Link>
 
+          {isDev && (
           <Link
             href="/dashboard/modules"
             className="group block p-5 sm:p-8 bg-white rounded-2xl shadow-sm border border-gray-200 hover:shadow-md hover:border-emerald-300 transition-all"
@@ -90,15 +94,12 @@ export default async function HomePage() {
             <div className="w-12 h-12 bg-emerald-100 rounded-xl flex items-center justify-center mb-4 group-hover:bg-emerald-200 transition-colors">
               <DollarSign className="w-6 h-6 text-emerald-600" />
             </div>
-            <h2 className="text-xl font-semibold mb-2">
-              {isDev ? "단가표 관리" : "단가표 보기"}
-            </h2>
+            <h2 className="text-xl font-semibold mb-2">단가표 관리</h2>
             <p className="text-gray-500">
-              {isDev
-                ? "모듈 단가를 확인하고 순서를 관리합니다"
-                : "모듈별 기본 단가를 확인합니다"}
+              모듈 단가를 확인하고 순서를 관리합니다
             </p>
           </Link>
+          )}
         </div>
       </div>
     </div>

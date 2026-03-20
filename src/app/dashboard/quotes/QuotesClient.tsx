@@ -31,9 +31,11 @@ const FILTERS = [
 export function QuotesClient({
   quotes,
   userRole,
+  showPrice = true,
 }: {
   quotes: QuoteListItem[];
   userRole: string;
+  showPrice?: boolean;
 }) {
   const [filter, setFilter] = useState("");
   const [search, setSearch] = useState("");
@@ -146,7 +148,7 @@ export function QuotesClient({
                   <th className="text-left px-3 sm:px-4 py-3 text-xs sm:text-sm font-medium text-gray-500">행사명</th>
                   <th className="text-center px-3 sm:px-4 py-3 text-xs sm:text-sm font-medium text-gray-500 hidden sm:table-cell">유형</th>
                   <th className="text-left px-3 sm:px-4 py-3 text-xs sm:text-sm font-medium text-gray-500 hidden sm:table-cell">요청자</th>
-                  <th className="text-right px-3 sm:px-4 py-3 text-xs sm:text-sm font-medium text-gray-500 hidden sm:table-cell">금액</th>
+                  {showPrice && <th className="text-right px-3 sm:px-4 py-3 text-xs sm:text-sm font-medium text-gray-500 hidden sm:table-cell">금액</th>}
                   <th className="text-center px-3 sm:px-4 py-3 text-xs sm:text-sm font-medium text-gray-500">상태</th>
                   <th className="text-center px-3 sm:px-4 py-3 text-xs sm:text-sm font-medium text-gray-500 hidden md:table-cell">요청일</th>
                 </tr>
@@ -173,9 +175,11 @@ export function QuotesClient({
                     <td className="px-3 sm:px-4 py-3 text-sm text-gray-600 hidden sm:table-cell">
                       {q.requesterName}
                     </td>
-                    <td className="px-3 sm:px-4 py-3 text-sm text-right font-medium hidden sm:table-cell">
-                      {formatKRW(q.totalAmount)}원
-                    </td>
+                    {showPrice && (
+                      <td className="px-3 sm:px-4 py-3 text-sm text-right font-medium hidden sm:table-cell">
+                        {formatKRW(q.totalAmount)}원
+                      </td>
+                    )}
                     <td className="px-3 sm:px-4 py-3 text-center">
                       <span
                         className={`inline-block px-2 sm:px-2.5 py-0.5 rounded-full text-xs font-medium ${

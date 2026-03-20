@@ -14,7 +14,8 @@ export interface AuthUser {
 interface AuthContextType {
   user: AuthUser | null;
   loading: boolean;
-  isDev: boolean;
+  isDev: boolean;        // dev (관리자)만
+  isDevTeam: boolean;    // dev + dev_staff (개발팀 전체)
   refresh: () => void;
 }
 
@@ -22,6 +23,7 @@ const AuthContext = createContext<AuthContextType>({
   user: null,
   loading: true,
   isDev: false,
+  isDevTeam: false,
   refresh: () => {},
 });
 
@@ -52,7 +54,13 @@ export function AuthProvider({
   }, [initialUser]);
 
   return (
-    <AuthContext.Provider value={{ user, loading, isDev: user?.role === "dev", refresh: fetchUser }}>
+    <AuthContext.Provider value={{
+      user,
+      loading,
+      isDev: user?.role === "dev",
+      isDevTeam: user?.role === "dev" || user?.role === "dev_staff",
+      refresh: fetchUser,
+    }}>
       {children}
     </AuthContext.Provider>
   );

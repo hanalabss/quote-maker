@@ -55,6 +55,16 @@ export async function requireDev(): Promise<{ user: AuthUser } | { error: string
 }
 
 /**
+ * dev 또는 dev_staff role 필수 인증 (개발팀 전체).
+ */
+export async function requireDevTeam(): Promise<{ user: AuthUser } | { error: string; status: number }> {
+  const user = await getAuthUser();
+  if (!user) return { error: "로그인이 필요합니다", status: 401 };
+  if (user.role !== "dev" && user.role !== "dev_staff") return { error: "권한이 없습니다", status: 403 };
+  return { user };
+}
+
+/**
  * 로그인 필수 인증 (role 무관). 실패 시 { error, status } 반환.
  */
 export async function requireAuth(): Promise<{ user: AuthUser } | { error: string; status: number }> {

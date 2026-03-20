@@ -115,6 +115,7 @@ async function main() {
     { loginId: "jdy", password: "1234", name: "정두용", email: "jdy@hanapf.kr", role: "sales", team: "사업팀", position: "팀장" },
     { loginId: "cmb", password: "1234", name: "채민병", email: "cmb@hanapf.kr", role: "sales", team: "사업팀", position: "대리" },
     { loginId: "kjn", password: "1234", name: "김정남", email: "kjn@hanapf.kr", role: "sales", team: "사업팀", position: "이사" },
+    { loginId: "dev1", password: "1234", name: "개발직원", email: "dev1@hanapf.kr", role: "dev_staff", team: "개발팀", position: "사원" },
   ];
 
   for (const raw of usersRaw) {
