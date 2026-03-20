@@ -112,7 +112,7 @@ export default function ProfilePage() {
   return (
     <div className="max-w-lg mx-auto">
       <div className="flex items-center gap-3 mb-6">
-        <Link href="/" className="text-gray-400 hover:text-gray-600">
+        <Link href="/" className="text-gray-400 hover:text-gray-600" aria-label="홈으로 돌아가기">
           <ArrowLeft className="w-5 h-5" />
         </Link>
         <h1 className="text-xl font-bold">내 정보 수정</h1>
@@ -137,10 +137,11 @@ export default function ProfilePage() {
 
         {/* 수정 가능한 필드 */}
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1.5">
+          <label htmlFor="profile-name" className="block text-sm font-medium text-gray-700 mb-1.5">
             이름 <span className="text-red-500">*</span>
           </label>
           <input
+            id="profile-name"
             type="text"
             value={form.name}
             onChange={(e) => setForm((prev) => ({ ...prev, name: e.target.value }))}
@@ -149,10 +150,11 @@ export default function ProfilePage() {
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1.5">
+          <label htmlFor="profile-email" className="block text-sm font-medium text-gray-700 mb-1.5">
             이메일 <span className="text-red-500">*</span>
           </label>
           <input
+            id="profile-email"
             type="email"
             value={form.email}
             onChange={(e) => setForm((prev) => ({ ...prev, email: e.target.value }))}
@@ -162,10 +164,11 @@ export default function ProfilePage() {
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1.5">
+          <label htmlFor="profile-phone" className="block text-sm font-medium text-gray-700 mb-1.5">
             전화번호
           </label>
           <input
+            id="profile-phone"
             type="tel"
             value={form.phone}
             onChange={(e) => setForm((prev) => ({ ...prev, phone: e.target.value }))}
@@ -176,10 +179,11 @@ export default function ProfilePage() {
 
         <div className="grid sm:grid-cols-2 gap-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1.5">
+            <label htmlFor="profile-team" className="block text-sm font-medium text-gray-700 mb-1.5">
               팀/부서
             </label>
             <input
+              id="profile-team"
               type="text"
               value={form.team}
               onChange={(e) => setForm((prev) => ({ ...prev, team: e.target.value }))}
@@ -188,10 +192,11 @@ export default function ProfilePage() {
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1.5">
+            <label htmlFor="profile-position" className="block text-sm font-medium text-gray-700 mb-1.5">
               직급
             </label>
             <input
+              id="profile-position"
               type="text"
               value={form.position}
               onChange={(e) => setForm((prev) => ({ ...prev, position: e.target.value }))}
@@ -204,20 +209,23 @@ export default function ProfilePage() {
         <hr />
 
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1.5">
+          <label htmlFor="profile-password" className="block text-sm font-medium text-gray-700 mb-1.5">
             비밀번호 변경
           </label>
           <div className="relative">
             <input
+              id="profile-password"
               type={showPassword ? "text" : "password"}
               value={form.password}
               onChange={(e) => setForm((prev) => ({ ...prev, password: e.target.value }))}
               placeholder="변경할 비밀번호 입력 (변경 시에만)"
+              autoComplete="new-password"
               className="w-full px-4 py-2.5 pr-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
             />
             <button
               type="button"
               onClick={() => setShowPassword((v) => !v)}
+              aria-label={showPassword ? "비밀번호 숨기기" : "비밀번호 보기"}
               className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
             >
               {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}

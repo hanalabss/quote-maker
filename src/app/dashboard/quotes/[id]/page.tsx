@@ -209,7 +209,7 @@ export default function QuoteDetailPage({
       {/* Header */}
       <div className="flex items-center justify-between mb-6 gap-2">
         <div className="flex items-center gap-2 sm:gap-3 min-w-0">
-          <Link href="/dashboard/quotes" className="text-gray-400 hover:text-gray-600 shrink-0">
+          <Link href="/dashboard/quotes" className="text-gray-400 hover:text-gray-600 shrink-0" aria-label="견적 목록으로 돌아가기">
             <ArrowLeft className="w-5 h-5" />
           </Link>
           <div className="min-w-0">
@@ -681,9 +681,9 @@ export default function QuoteDetailPage({
 
       {/* 삭제 확인 모달 */}
       {showDeleteConfirm && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl p-6 max-w-sm w-full">
-            <h3 className="text-lg font-semibold mb-2">
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={() => setShowDeleteConfirm(false)} onKeyDown={(e) => { if (e.key === "Escape") setShowDeleteConfirm(false); }}>
+          <div className="bg-white rounded-2xl p-6 max-w-sm w-full" role="dialog" aria-modal="true" aria-labelledby="delete-title" onClick={(e) => e.stopPropagation()}>
+            <h3 id="delete-title" className="text-lg font-semibold mb-2">
               {isDev ? "견적 삭제" : "견적 숨김"}
             </h3>
             <p className="text-sm text-gray-600 mb-6">
@@ -712,9 +712,9 @@ export default function QuoteDetailPage({
 
       {/* 반려 모달 */}
       {showRejectModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl p-6 max-w-md w-full">
-            <h3 className="text-lg font-semibold mb-4">견적 반려</h3>
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={() => setShowRejectModal(false)} onKeyDown={(e) => { if (e.key === "Escape") setShowRejectModal(false); }}>
+          <div className="bg-white rounded-2xl p-6 max-w-md w-full" role="dialog" aria-modal="true" aria-labelledby="reject-title" onClick={(e) => e.stopPropagation()}>
+            <h3 id="reject-title" className="text-lg font-semibold mb-4">견적 반려</h3>
             <textarea
               value={rejectionReason}
               onChange={(e) => setRejectionReason(e.target.value)}

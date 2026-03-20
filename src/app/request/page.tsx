@@ -296,7 +296,7 @@ export default function RequestPage() {
       {/* Header */}
       <header className="bg-white border-b">
         <div className="max-w-3xl mx-auto px-4 py-4 flex items-center gap-4">
-          <Link href="/" className="text-gray-400 hover:text-gray-600">
+          <Link href="/" className="text-gray-400 hover:text-gray-600" aria-label="홈으로 돌아가기">
             <ArrowLeft className="w-5 h-5" />
           </Link>
           <h1 className="text-lg font-semibold">견적 요청</h1>
@@ -380,21 +380,24 @@ export default function RequestPage() {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                <label htmlFor="req-eventName" className="block text-sm font-medium text-gray-700 mb-1.5">
                   행사명 <span className="text-red-500">*</span>
                 </label>
                 <input
+                  id="req-eventName"
                   type="text"
                   value={form.eventName}
                   onChange={(e) => updateForm("eventName", e.target.value)}
                   placeholder="예: 2026 하나플랫폼 키오스크 전시회"
+                  required
                   className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
                 />
               </div>
               <div className="grid sm:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1.5">행사 시작일</label>
+                  <label htmlFor="req-eventDate" className="block text-sm font-medium text-gray-700 mb-1.5">행사 시작일</label>
                   <input
+                    id="req-eventDate"
                     type="date"
                     value={form.eventDate}
                     onChange={(e) => updateForm("eventDate", e.target.value)}
@@ -402,8 +405,9 @@ export default function RequestPage() {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1.5">행사 종료일</label>
+                  <label htmlFor="req-eventEndDate" className="block text-sm font-medium text-gray-700 mb-1.5">행사 종료일</label>
                   <input
+                    id="req-eventEndDate"
                     type="date"
                     value={form.eventEndDate}
                     onChange={(e) => updateForm("eventEndDate", e.target.value)}
@@ -413,8 +417,9 @@ export default function RequestPage() {
               </div>
               <div className="grid sm:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1.5">행사 장소</label>
+                  <label htmlFor="req-venue" className="block text-sm font-medium text-gray-700 mb-1.5">행사 장소</label>
                   <input
+                    id="req-venue"
                     type="text"
                     value={form.venue}
                     onChange={(e) => updateForm("venue", e.target.value)}
@@ -423,8 +428,9 @@ export default function RequestPage() {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1.5">납기일</label>
+                  <label htmlFor="req-deadline" className="block text-sm font-medium text-gray-700 mb-1.5">납기일</label>
                   <input
+                    id="req-deadline"
                     type="date"
                     value={form.deadline}
                     onChange={(e) => updateForm("deadline", e.target.value)}
@@ -433,8 +439,9 @@ export default function RequestPage() {
                 </div>
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1.5">예상 방문객 수</label>
+                <label htmlFor="req-visitors" className="block text-sm font-medium text-gray-700 mb-1.5">예상 방문객 수</label>
                 <input
+                  id="req-visitors"
                   type="text"
                   value={form.expectedVisitors}
                   onChange={(e) => updateForm("expectedVisitors", e.target.value)}
@@ -445,22 +452,25 @@ export default function RequestPage() {
               <hr />
               <h3 className="text-lg font-medium">요청자 정보</h3>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                <label htmlFor="req-requesterName" className="block text-sm font-medium text-gray-700 mb-1.5">
                   요청자명 <span className="text-red-500">*</span>
                 </label>
                 <input
+                  id="req-requesterName"
                   type="text"
                   value={form.requesterName}
                   onChange={(e) => updateForm("requesterName", e.target.value)}
                   placeholder="이름"
+                  required
                   className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
                 />
               </div>
               <div className="grid sm:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1.5">연락처</label>
+                  <label htmlFor="req-contact" className="block text-sm font-medium text-gray-700 mb-1.5">연락처</label>
                   <input
-                    type="text"
+                    id="req-contact"
+                    type="tel"
                     value={form.requesterContact}
                     onChange={(e) => updateForm("requesterContact", e.target.value)}
                     placeholder="010-0000-0000"
@@ -468,8 +478,9 @@ export default function RequestPage() {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1.5">이메일</label>
+                  <label htmlFor="req-email" className="block text-sm font-medium text-gray-700 mb-1.5">이메일</label>
                   <input
+                    id="req-email"
                     type="email"
                     value={form.requesterEmail}
                     onChange={(e) => updateForm("requesterEmail", e.target.value)}
@@ -702,8 +713,9 @@ export default function RequestPage() {
                 </div>
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">인쇄물 사이즈</label>
+                <label htmlFor="req-printSize" className="block text-sm font-medium text-gray-700 mb-2">인쇄물 사이즈</label>
                 <input
+                  id="req-printSize"
                   type="text"
                   value={form.printSize}
                   onChange={(e) => updateForm("printSize", e.target.value)}
@@ -817,10 +829,11 @@ export default function RequestPage() {
                       </button>
                       {form.useKsnetPayment && (
                         <div className="mt-2 ml-7">
-                          <label className="block text-xs font-medium text-gray-600 mb-1">
+                          <label htmlFor="req-ksnet" className="block text-xs font-medium text-gray-600 mb-1">
                             KSNET 가맹점번호
                           </label>
                           <input
+                            id="req-ksnet"
                             type="text"
                             value={form.ksnetMerchantId}
                             onChange={(e) => setForm((prev) => ({ ...prev, ksnetMerchantId: e.target.value }))}
@@ -838,10 +851,11 @@ export default function RequestPage() {
               )}
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                <label htmlFor="req-notes" className="block text-sm font-medium text-gray-700 mb-1.5">
                   기타 요청사항
                 </label>
                 <textarea
+                  id="req-notes"
                   value={form.notes}
                   onChange={(e) => updateForm("notes", e.target.value)}
                   rows={4}
@@ -1123,7 +1137,7 @@ export default function RequestPage() {
             <button
               onClick={() => setStep((s) => s - 1)}
               disabled={step === 0}
-              className="flex items-center gap-2 px-5 py-2.5 text-gray-600 hover:text-gray-900 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+              className="flex items-center gap-2 px-5 py-2.5 text-gray-600 hover:text-gray-900 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
             >
               <ArrowLeft className="w-4 h-4" />
               이전

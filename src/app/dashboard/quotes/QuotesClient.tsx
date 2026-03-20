@@ -115,13 +115,15 @@ export function QuotesClient({
           ))}
         </div>
         <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" aria-hidden="true" />
+          <label htmlFor="quote-search" className="sr-only">견적 검색</label>
           <input
+            id="quote-search"
             type="text"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="행사명, 요청자, 견적번호 검색"
-            className="w-full pl-10 pr-4 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+            className="w-full pl-10 pr-4 py-2.5 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none"
           />
         </div>
       </div>
@@ -129,7 +131,12 @@ export function QuotesClient({
       {/* 목록 */}
       <div className="bg-white rounded-xl border overflow-hidden">
         {filtered.length === 0 ? (
-          <div className="p-12 text-center text-gray-400">견적 요청이 없습니다</div>
+          <div className="p-12 text-center">
+            <p className="text-gray-400 mb-3">견적 요청이 없습니다</p>
+            <a href="/request" className="text-sm text-blue-600 hover:text-blue-800 font-medium">
+              + 새 견적 요청하기
+            </a>
+          </div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full">
@@ -149,7 +156,10 @@ export function QuotesClient({
                   <tr
                     key={q.id}
                     onClick={() => router.push(`/dashboard/quotes/${q.id}`)}
-                    className="hover:bg-gray-50 transition-colors cursor-pointer"
+                    onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); router.push(`/dashboard/quotes/${q.id}`); } }}
+                    tabIndex={0}
+                    role="link"
+                    className="hover:bg-gray-50 transition-colors cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-inset"
                   >
                     <td className="px-3 sm:px-4 py-3 text-xs sm:text-sm font-mono">{q.quoteNumber}</td>
                     <td className="px-3 sm:px-4 py-3 text-xs sm:text-sm font-medium max-w-[120px] sm:max-w-none truncate">{q.eventName}</td>

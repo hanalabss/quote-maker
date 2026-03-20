@@ -51,33 +51,37 @@ export default function LoginPage() {
           className="bg-white rounded-2xl shadow-sm border p-6 space-y-4"
         >
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1.5">
+            <label htmlFor="loginId" className="block text-sm font-medium text-gray-700 mb-1.5">
               아이디
             </label>
             <input
+              id="loginId"
               type="text"
               value={loginId}
               onChange={(e) => setLoginId(e.target.value)}
               placeholder="아이디를 입력하세요"
+              autoComplete="username"
               autoFocus
               className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1.5">
+            <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-1.5">
               비밀번호
             </label>
             <input
+              id="password"
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               placeholder="비밀번호를 입력하세요"
+              autoComplete="current-password"
               className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
             />
           </div>
 
           {error && (
-            <p className="text-sm text-red-600 bg-red-50 px-3 py-2 rounded-lg">
+            <p className="text-sm text-red-600 bg-red-50 px-3 py-2 rounded-lg" role="alert">
               {error}
             </p>
           )}
