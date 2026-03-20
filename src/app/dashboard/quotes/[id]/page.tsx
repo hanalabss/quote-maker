@@ -626,18 +626,22 @@ export default function QuoteDetailPage({
             </div>
           )}
 
-          {/* 액션 버튼 - dev: 상태 변경 */}
-          {isDev && (quote.status === "pending" || quote.status === "reviewing") && (
+          {/* 액션 버튼 - dev: pending이면 검토 시작만 */}
+          {isDev && quote.status === "pending" && (
             <div className="flex flex-wrap gap-2 sm:gap-3">
-              {quote.status === "pending" && (
-                <button
-                  onClick={() => updateStatus("reviewing")}
-                  disabled={saving}
-                  className="flex items-center gap-1.5 px-3 sm:px-5 py-2 sm:py-2.5 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors"
-                >
-                  검토 시작
-                </button>
-              )}
+              <button
+                onClick={() => updateStatus("reviewing")}
+                disabled={saving}
+                className="flex items-center gap-1.5 px-3 sm:px-5 py-2 sm:py-2.5 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors"
+              >
+                검토 시작
+              </button>
+            </div>
+          )}
+
+          {/* 액션 버튼 - dev: reviewing이면 승인/반려 */}
+          {isDev && quote.status === "reviewing" && (
+            <div className="flex flex-wrap gap-2 sm:gap-3">
               <button
                 onClick={() => updateStatus("approved")}
                 disabled={saving}
