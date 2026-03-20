@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Loader2, LogIn } from "lucide-react";
 
@@ -8,8 +8,17 @@ export default function LoginPage() {
   const router = useRouter();
   const [loginId, setLoginId] = useState("");
   const [password, setPassword] = useState("");
+  const [rememberMe, setRememberMe] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    const saved = localStorage.getItem("saved-login-id");
+    if (saved) {
+      setLoginId(saved);
+      setRememberMe(true);
+    }
+  }, []);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -27,6 +36,12 @@ export default function LoginPage() {
         const data = await res.json();
         setError(data.error || "로그인에 실패했습니다");
         return;
+      }
+
+      if (rememberMe) {
+        localStorage.setItem("saved-login-id", loginId);
+      } else {
+        localStorage.removeItem("saved-login-id");
       }
 
       router.push("/");
@@ -79,6 +94,17 @@ export default function LoginPage() {
               className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
             />
           </div>
+
+          <label htmlFor="rememberMe" className="flex items-center gap-2 cursor-pointer select-none">
+            <input
+              id="rememberMe"
+              type="checkbox"
+              checked={rememberMe}
+              onChange={(e) => setRememberMe(e.target.checked)}
+              className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+            />
+            <span className="text-sm text-gray-600">아이디 저장</span>
+          </label>
 
           {error && (
             <p className="text-sm text-red-600 bg-red-50 px-3 py-2 rounded-lg" role="alert">
