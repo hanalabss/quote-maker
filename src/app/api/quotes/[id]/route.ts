@@ -60,6 +60,7 @@ export async function PATCH(
     const validTransitions: Record<string, string[]> = {
       pending: ["reviewing"],
       reviewing: ["approved", "rejected"],
+      approved: ["reviewing"],
       rejected: ["pending"],
     };
     const allowed = validTransitions[quote.status];
@@ -137,5 +138,44 @@ export async function PATCH(
   } catch (error) {
     console.error("견적 수정 오류:", error);
     return NextResponse.json({ error: "견적 수정 중 오류가 발생했습니다" }, { status: 500 });
+  }
+}
+
+export async function DELETE(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const user = await getAuthUser();
+    if (!user) {
+      return NextResponse.json({ error: "로그인이 필요합니다" }, { status: 401 });
+    }
+
+    const { id } = await params;
+    const quote = await prisma.quote.findUnique({ where: { id } });
+    if (!quote) {
+      return NextResponse.json({ error: "견적을 찾을 수 없습니다" }, { status: 404 });
+    }
+
+    if (user.role === "dev") {
+      // 관리자: 완전 삭제
+      await prisma.quoteItem.deleteMany({ where: { quoteId: id } });
+      await prisma.quote.delete({ where: { id } });
+      return NextResponse.json({ deleted: true });
+    }
+
+    // 요청자 본인만 숨김 처리 가능
+    if (quote.createdById !== user.id) {
+      return NextResponse.json({ error: "권한이 없습니다" }, { status: 403 });
+    }
+
+    await prisma.quote.update({
+      where: { id },
+      data: { isHidden: true },
+    });
+    return NextResponse.json({ hidden: true });
+  } catch (error) {
+    console.error("견적 삭제 오류:", error);
+    return NextResponse.json({ error: "견적 삭제 중 오류가 발생했습니다" }, { status: 500 });
   }
 }

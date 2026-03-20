@@ -67,6 +67,9 @@ model Quote {
   printSize         String?
   ksnetMerchantId   String?  // KSNET 가맹점번호
 
+  // 숨김 (요청자가 삭제 시 화면에서만 숨김, DB 유지)
+  isHidden        Boolean  @default(false)
+
   // 기타
   notes           String?
   rejectionReason String?

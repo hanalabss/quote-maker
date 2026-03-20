@@ -10,6 +10,7 @@ export default async function QuotesPage() {
   const where: Record<string, unknown> = {};
   if (user.role === "sales") {
     where.createdById = user.id;
+    where.isHidden = false; // sales는 숨긴 견적 제외
   }
 
   const quotes = await prisma.quote.findMany({

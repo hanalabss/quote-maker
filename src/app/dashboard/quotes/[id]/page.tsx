@@ -2,6 +2,7 @@
 
 import { useState, useEffect, use } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useAuth } from "@/components/AuthProvider";
 import {
   ArrowLeft,
@@ -13,6 +14,7 @@ import {
   Save,
   Plus,
   Trash2,
+  RotateCcw,
   Paperclip,
   FileText,
   Image,
@@ -61,6 +63,7 @@ interface QuoteDetail {
   vat: number;
   totalAmount: number;
   attachments: { fileName: string; originalName: string; size: number; mimeType: string }[] | null;
+  createdById: string | null;
   items: QuoteItem[];
   createdAt: string;
   createdBy?: { name: string; team: string; email: string } | null;
@@ -81,7 +84,9 @@ export default function QuoteDetailPage({
   const [rejectionReason, setRejectionReason] = useState("");
   const [showRejectModal, setShowRejectModal] = useState(false);
   const [saving, setSaving] = useState(false);
-  const { isDev } = useAuth();
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const { user, isDev } = useAuth();
+  const router = useRouter();
 
   useEffect(() => {
     fetch(`/api/quotes/${id}`)
@@ -135,6 +140,19 @@ export default function QuoteDetailPage({
     setEditItems(data.items);
     setEditing(false);
     setSaving(false);
+  }
+
+  async function handleDelete() {
+    setSaving(true);
+    const res = await fetch(`/api/quotes/${id}`, { method: "DELETE" });
+    if (res.ok) {
+      router.push("/dashboard/quotes");
+    } else {
+      const err = await res.json();
+      alert(err.error || "삭제에 실패했습니다");
+    }
+    setSaving(false);
+    setShowDeleteConfirm(false);
   }
 
   function updateEditItem(index: number, field: string, value: string | number) {
@@ -600,8 +618,8 @@ export default function QuoteDetailPage({
             </div>
           )}
 
-          {/* 액션 버튼 - dev만 */}
-          {isDev &&(quote.status === "pending" || quote.status === "reviewing") && (
+          {/* 액션 버튼 - dev: 상태 변경 */}
+          {isDev && (quote.status === "pending" || quote.status === "reviewing") && (
             <div className="flex flex-wrap gap-2 sm:gap-3">
               {quote.status === "pending" && (
                 <button
@@ -630,8 +648,67 @@ export default function QuoteDetailPage({
               </button>
             </div>
           )}
+
+          {/* 승인 되돌리기 - dev만, approved 상태일 때 */}
+          {isDev && quote.status === "approved" && (
+            <div className="flex flex-wrap gap-2 sm:gap-3">
+              <button
+                onClick={() => updateStatus("reviewing")}
+                disabled={saving}
+                className="flex items-center gap-1.5 px-3 sm:px-5 py-2 sm:py-2.5 text-sm bg-amber-600 text-white rounded-lg hover:bg-amber-700 disabled:opacity-50 transition-colors"
+              >
+                <RotateCcw className="w-4 h-4" />
+                승인 철회 (검토중으로)
+              </button>
+            </div>
+          )}
+
+          {/* 삭제 버튼 - dev: 완전삭제, 요청자: 숨김 */}
+          {(isDev || quote.createdById === user?.id) && (
+            <div className="pt-4 border-t">
+              <button
+                onClick={() => setShowDeleteConfirm(true)}
+                disabled={saving}
+                className="flex items-center gap-1.5 px-3 sm:px-5 py-2 sm:py-2.5 text-sm text-red-600 border border-red-300 rounded-lg hover:bg-red-50 disabled:opacity-50 transition-colors"
+              >
+                <Trash2 className="w-4 h-4" />
+                {isDev ? "견적 삭제" : "견적 삭제 (내 목록에서 숨김)"}
+              </button>
+            </div>
+          )}
         </div>
       </div>
+
+      {/* 삭제 확인 모달 */}
+      {showDeleteConfirm && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl p-6 max-w-sm w-full">
+            <h3 className="text-lg font-semibold mb-2">
+              {isDev ? "견적 삭제" : "견적 숨김"}
+            </h3>
+            <p className="text-sm text-gray-600 mb-6">
+              {isDev
+                ? "이 견적을 완전히 삭제합니다. 이 작업은 되돌릴 수 없습니다."
+                : "이 견적이 내 목록에서 숨겨집니다. 관리자는 계속 볼 수 있습니다."}
+            </p>
+            <div className="flex gap-2 justify-end">
+              <button
+                onClick={() => setShowDeleteConfirm(false)}
+                className="px-4 py-2 text-sm border rounded-lg hover:bg-gray-50"
+              >
+                취소
+              </button>
+              <button
+                onClick={handleDelete}
+                disabled={saving}
+                className="px-4 py-2 text-sm bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50"
+              >
+                {isDev ? "삭제" : "숨기기"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* 반려 모달 */}
       {showRejectModal && (
