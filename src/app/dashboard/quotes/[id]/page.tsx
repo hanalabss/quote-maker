@@ -461,31 +461,39 @@ export default function QuoteDetailPage({
                 <div className="space-y-3">
                   {editItems.map((item, i) => (
                     <div key={item.id} className="flex items-start gap-2 p-3 bg-gray-50 rounded-lg">
-                      <div className="flex-1 grid sm:grid-cols-2 lg:grid-cols-4 gap-2">
-                        <div className="sm:col-span-2 lg:col-span-2">
-                          <input
-                            value={item.itemName}
-                            onChange={(e) => updateEditItem(i, "itemName", e.target.value)}
-                            placeholder="항목명"
-                            className="w-full px-3 py-1.5 text-sm border rounded-md"
-                          />
+                      <div className="flex-1 space-y-2">
+                        <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-2">
+                          <div className="sm:col-span-2 lg:col-span-2">
+                            <input
+                              value={item.itemName}
+                              onChange={(e) => updateEditItem(i, "itemName", e.target.value)}
+                              placeholder="항목명"
+                              className="w-full px-3 py-1.5 text-sm border rounded-lg"
+                            />
+                          </div>
+                          <div>
+                            <input
+                              type="number"
+                              value={item.unitPrice}
+                              onChange={(e) =>
+                                updateEditItem(i, "unitPrice", parseInt(e.target.value) || 0)
+                              }
+                              placeholder="단가"
+                              className="w-full px-3 py-1.5 text-sm border rounded-lg text-right"
+                            />
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm text-gray-500">
+                              = {formatKRW(item.unitPrice * item.quantity)}원
+                            </span>
+                          </div>
                         </div>
-                        <div>
-                          <input
-                            type="number"
-                            value={item.unitPrice}
-                            onChange={(e) =>
-                              updateEditItem(i, "unitPrice", parseInt(e.target.value) || 0)
-                            }
-                            placeholder="단가"
-                            className="w-full px-3 py-1.5 text-sm border rounded-md text-right"
-                          />
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <span className="text-sm text-gray-500">
-                            = {formatKRW(item.unitPrice * item.quantity)}원
-                          </span>
-                        </div>
+                        <input
+                          value={item.description || ""}
+                          onChange={(e) => updateEditItem(i, "description", e.target.value)}
+                          placeholder="내용 (엑셀 견적서에 표시됩니다)"
+                          className="w-full px-3 py-1.5 text-sm border rounded-lg text-gray-600"
+                        />
                       </div>
                       <button
                         onClick={() => removeItem(i)}
