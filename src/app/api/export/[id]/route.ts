@@ -8,11 +8,15 @@ import type { QuoteType } from "@/types";
 
 // 공통 스타일
 const thin: Partial<ExcelJS.Border> = { style: "thin" };
+const hair: Partial<ExcelJS.Border> = { style: "hair" };
 const thinBorder: Partial<ExcelJS.Borders> = {
   top: thin, bottom: thin, left: thin, right: thin,
 };
-const hairBottom: Partial<ExcelJS.Borders> = {
-  left: thin, right: thin, bottom: { style: "hair" },
+const itemBorder: Partial<ExcelJS.Borders> = {
+  top: hair, bottom: hair, left: thin, right: thin,
+};
+const itemBorderInner: Partial<ExcelJS.Borders> = {
+  top: hair, bottom: hair,
 };
 
 export async function GET(
@@ -204,27 +208,27 @@ export async function GET(
     cellA.value = i + 1;
     cellA.font = { size: 10 };
     cellA.alignment = { horizontal: "center", vertical: "middle" };
-    cellA.border = hairBottom;
+    cellA.border = itemBorder;
 
     // B: 항목명
     const cellB = ws.getCell(`B${r}`);
     cellB.value = item?.itemName || "";
     cellB.font = { size: 10 };
     cellB.alignment = { horizontal: "center", vertical: "middle", wrapText: true };
-    cellB.border = hairBottom;
+    cellB.border = itemBorder;
 
-    // C: 내용 (설명)
+    // C: 내용 (설명) - 병합 시작 셀
     const cellC = ws.getCell(`C${r}`);
     cellC.value = item?.description || "";
     cellC.font = { size: 9 };
     cellC.alignment = { horizontal: "center", vertical: "middle", wrapText: true };
-    cellC.border = hairBottom;
+    cellC.border = itemBorder;
 
     // 병합된 D~F 테두리
     for (const col of ["D", "E"]) {
-      ws.getCell(`${col}${r}`).border = { bottom: { style: "hair" } };
+      ws.getCell(`${col}${r}`).border = itemBorderInner;
     }
-    ws.getCell(`F${r}`).border = { right: thin, bottom: { style: "hair" } };
+    ws.getCell(`F${r}`).border = { top: hair, bottom: hair, right: thin };
 
     // G: 단가
     const cellG = ws.getCell(`G${r}`);
@@ -232,7 +236,7 @@ export async function GET(
     cellG.numFmt = "#,##0";
     cellG.font = { size: 10 };
     cellG.alignment = { horizontal: "center", vertical: "middle" };
-    cellG.border = hairBottom;
+    cellG.border = itemBorder;
 
     // H: 금액
     const cellH = ws.getCell(`H${r}`);
@@ -240,16 +244,24 @@ export async function GET(
     cellH.numFmt = "#,##0";
     cellH.font = { size: 10 };
     cellH.alignment = { horizontal: "center", vertical: "middle" };
-    cellH.border = hairBottom;
+    cellH.border = itemBorder;
 
     // I: 비고
     const cellI = ws.getCell(`I${r}`);
     cellI.value = item?.note || "";
     cellI.font = { size: 9 };
     cellI.alignment = { horizontal: "center", vertical: "middle", wrapText: true };
-    cellI.border = hairBottom;
+    cellI.border = itemBorder;
 
-    ws.getRow(r).height = 15.75;
+    // 자동 높이: 내용 길이에 따라 조정 (최소 15.75)
+    const descLen = (item?.description || "").length;
+    const nameLen = (item?.itemName || "").length;
+    const maxLen = Math.max(descLen, nameLen);
+    if (maxLen > 30) {
+      ws.getRow(r).height = Math.min(15.75 * Math.ceil(maxLen / 25), 80);
+    } else {
+      ws.getRow(r).height = 15.75;
+    }
   }
 
   // ══════════════════════════════════════
