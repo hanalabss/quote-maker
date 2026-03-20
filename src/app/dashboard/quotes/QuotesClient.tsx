@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { Clock, CheckCircle, XCircle, Eye, Search } from "lucide-react";
 import { formatKRW } from "@/lib/pricing";
 import type { QuoteStatus, QuoteType } from "@/types";
@@ -36,6 +37,7 @@ export function QuotesClient({
 }) {
   const [filter, setFilter] = useState("");
   const [search, setSearch] = useState("");
+  const router = useRouter();
 
   const filtered = quotes.filter((q) => {
     const matchFilter = !filter || q.status === filter;
@@ -140,12 +142,15 @@ export function QuotesClient({
                   <th className="text-right px-3 sm:px-4 py-3 text-xs sm:text-sm font-medium text-gray-500 hidden sm:table-cell">금액</th>
                   <th className="text-center px-3 sm:px-4 py-3 text-xs sm:text-sm font-medium text-gray-500">상태</th>
                   <th className="text-center px-3 sm:px-4 py-3 text-xs sm:text-sm font-medium text-gray-500 hidden md:table-cell">요청일</th>
-                  <th className="px-3 sm:px-4 py-3"></th>
                 </tr>
               </thead>
               <tbody className="divide-y">
                 {filtered.map((q) => (
-                  <tr key={q.id} className="hover:bg-gray-50 transition-colors">
+                  <tr
+                    key={q.id}
+                    onClick={() => router.push(`/dashboard/quotes/${q.id}`)}
+                    className="hover:bg-gray-50 transition-colors cursor-pointer"
+                  >
                     <td className="px-3 sm:px-4 py-3 text-xs sm:text-sm font-mono">{q.quoteNumber}</td>
                     <td className="px-3 sm:px-4 py-3 text-xs sm:text-sm font-medium max-w-[120px] sm:max-w-none truncate">{q.eventName}</td>
                     <td className="px-3 sm:px-4 py-3 text-center hidden sm:table-cell">
@@ -172,14 +177,6 @@ export function QuotesClient({
                     </td>
                     <td className="px-3 sm:px-4 py-3 text-sm text-gray-500 text-center hidden md:table-cell">
                       {new Date(q.createdAt).toLocaleDateString("ko-KR")}
-                    </td>
-                    <td className="px-3 sm:px-4 py-3">
-                      <Link
-                        href={`/dashboard/quotes/${q.id}`}
-                        className="text-blue-600 hover:text-blue-800 text-xs sm:text-sm font-medium"
-                      >
-                        상세
-                      </Link>
                     </td>
                   </tr>
                 ))}
