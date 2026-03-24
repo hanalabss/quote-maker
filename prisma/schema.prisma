@@ -23,6 +23,7 @@ model User {
 
   createdQuotes  Quote[] @relation("CreatedBy")
   reviewedQuotes Quote[] @relation("ReviewedBy")
+  comments       QuoteComment[]
 }
 
 model Module {
@@ -88,6 +89,7 @@ model Quote {
   reviewedBy      User?    @relation("ReviewedBy", fields: [reviewedById], references: [id])
 
   items           QuoteItem[]
+  comments        QuoteComment[]
 
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
@@ -116,4 +118,18 @@ model QuoteItem {
   updatedAt   DateTime @updatedAt
 
   @@index([quoteId])
+}
+
+model QuoteComment {
+  id        String   @id @default(cuid())
+  quoteId   String
+  quote     Quote    @relation(fields: [quoteId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  content   String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([quoteId])
+  @@index([createdAt])
 }

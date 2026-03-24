@@ -19,6 +19,8 @@ import {
   FileText,
   Image,
   Music,
+  MessageCircle,
+  Send,
 } from "lucide-react";
 import { formatKRW } from "@/lib/pricing";
 import type { QuoteStatus, QuoteType } from "@/types";
@@ -68,6 +70,14 @@ interface QuoteDetail {
   createdAt: string;
   createdBy?: { name: string; team: string; email: string } | null;
   reviewedBy?: { name: string } | null;
+  comments?: QuoteCommentType[];
+}
+
+interface QuoteCommentType {
+  id: string;
+  content: string;
+  createdAt: string;
+  user: { name: string; role: string; team: string | null };
 }
 
 export default function QuoteDetailPage({
@@ -85,6 +95,9 @@ export default function QuoteDetailPage({
   const [showRejectModal, setShowRejectModal] = useState(false);
   const [saving, setSaving] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [comments, setComments] = useState<QuoteCommentType[]>([]);
+  const [newComment, setNewComment] = useState("");
+  const [commentSaving, setCommentSaving] = useState(false);
   const { user, isDev, isDevTeam } = useAuth();
   const showPrice = user?.role === "dev" || user?.role === "sales";
   const router = useRouter();
@@ -96,11 +109,32 @@ export default function QuoteDetailPage({
         setQuote(data);
         setEditItems(data.items || []);
         setReviewNote(data.reviewNote || "");
+        setComments(data.comments || []);
         setLoading(false);
       });
   }, [id]);
 
 
+
+  async function addComment() {
+    if (!newComment.trim()) return;
+    setCommentSaving(true);
+    try {
+      const res = await fetch(`/api/quotes/${id}/comments`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ content: newComment }),
+      });
+      if (res.ok) {
+        const comment = await res.json();
+        setComments((prev) => [...prev, comment]);
+        setNewComment("");
+      }
+    } catch (e) {
+      console.error("댓글 등록 오류:", e);
+    }
+    setCommentSaving(false);
+  }
 
   async function updateStatus(status: string, reason?: string) {
     setSaving(true);
@@ -628,6 +662,58 @@ export default function QuoteDetailPage({
               <p className="text-sm text-blue-700">{quote.reviewNote}</p>
             </div>
           )}
+
+          {/* 댓글 섹션 */}
+          <div className="bg-white rounded-xl border p-5">
+            <h3 className="font-medium mb-4 flex items-center gap-1.5">
+              <MessageCircle className="w-4 h-4" />
+              댓글 ({comments.length})
+            </h3>
+
+            {comments.length > 0 ? (
+              <div className="space-y-3 mb-4">
+                {comments.map((c) => (
+                  <div key={c.id} className={`p-3 rounded-lg ${c.user.role === "dev" ? "bg-blue-50 border border-blue-100" : "bg-gray-50 border border-gray-100"}`}>
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="text-sm font-medium">{c.user.name}</span>
+                      <span className={`text-xs px-1.5 py-0.5 rounded ${c.user.role === "dev" ? "bg-blue-100 text-blue-700" : "bg-gray-200 text-gray-600"}`}>
+                        {c.user.role === "dev" ? "개발팀" : "사업팀"}
+                      </span>
+                      <span className="text-xs text-gray-400">
+                        {new Date(c.createdAt).toLocaleString("ko-KR", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
+                      </span>
+                    </div>
+                    <p className="text-sm text-gray-700 whitespace-pre-wrap">{c.content}</p>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-sm text-gray-400 mb-4">아직 댓글이 없습니다</p>
+            )}
+
+            <div className="flex gap-2">
+              <textarea
+                value={newComment}
+                onChange={(e) => setNewComment(e.target.value)}
+                placeholder="댓글을 입력하세요..."
+                rows={2}
+                className="flex-1 px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none resize-none"
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
+                    e.preventDefault();
+                    addComment();
+                  }
+                }}
+              />
+              <button
+                onClick={addComment}
+                disabled={!newComment.trim() || commentSaving}
+                className="self-end px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors"
+              >
+                {commentSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+              </button>
+            </div>
+          </div>
 
           {/* 액션 버튼 - dev: pending이면 검토 시작만 */}
           {isDev && quote.status === "pending" && (
