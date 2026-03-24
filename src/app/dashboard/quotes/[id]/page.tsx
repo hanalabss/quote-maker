@@ -116,6 +116,18 @@ export default function QuoteDetailPage({
 
 
 
+  async function deleteComment(commentId: string) {
+    if (!confirm("댓글을 삭제하시겠습니까?")) return;
+    try {
+      const res = await fetch(`/api/quotes/${id}/comments/${commentId}`, { method: "DELETE" });
+      if (res.ok) {
+        setComments((prev) => prev.filter((c) => c.id !== commentId));
+      }
+    } catch (e) {
+      console.error("댓글 삭제 오류:", e);
+    }
+  }
+
   async function addComment() {
     if (!newComment.trim()) return;
     setCommentSaving(true);
@@ -682,6 +694,15 @@ export default function QuoteDetailPage({
                       <span className="text-xs text-gray-400">
                         {new Date(c.createdAt).toLocaleString("ko-KR", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
                       </span>
+                      {(isDev || c.user.name === user?.name) && (
+                        <button
+                          onClick={() => deleteComment(c.id)}
+                          className="ml-auto text-gray-300 hover:text-red-500 transition-colors"
+                          title="삭제"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      )}
                     </div>
                     <p className="text-sm text-gray-700 whitespace-pre-wrap">{c.content}</p>
                   </div>
