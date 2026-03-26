@@ -667,8 +667,8 @@ export default function QuoteDetailPage({
             </div>
           )}
 
-          {/* 검토 메모 표시 */}
-          {quote.reviewNote && quote.status !== "pending" && quote.status !== "reviewing" && (
+          {/* 검토 메모 표시 (reviewing 상태에서도 사업팀이 볼 수 있도록, dev는 textarea로 편집 중이므로 제외) */}
+          {quote.reviewNote && quote.status !== "pending" && !(isDev && quote.status === "reviewing") && (
             <div className="bg-blue-50 rounded-xl border border-blue-200 p-5">
               <h3 className="font-medium text-blue-800 mb-2">검토 메모</h3>
               <p className="text-sm text-blue-700">{quote.reviewNote}</p>
