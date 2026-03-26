@@ -671,7 +671,7 @@ export default function QuoteDetailPage({
           {quote.reviewNote && quote.status !== "pending" && !(isDev && quote.status === "reviewing") && (
             <div className="bg-blue-50 rounded-xl border border-blue-200 p-5">
               <h3 className="font-medium text-blue-800 mb-2">검토 메모</h3>
-              <p className="text-sm text-blue-700">{quote.reviewNote}</p>
+              <p className="text-sm text-blue-700 whitespace-pre-wrap">{quote.reviewNote}</p>
             </div>
           )}
 
