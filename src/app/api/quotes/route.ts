@@ -135,13 +135,18 @@ export async function POST(request: NextRequest) {
     const priceRate = TYPE_PRICE_RATE[quoteType] ?? 1.0;
     const pricing = calculateQuote(allModules, priceRate);
 
-    // UI_BASIC 항목에 화면 구성 설명 적용
-    if (screenComposition?.length > 0) {
-      const flowDesc = (screenComposition as string[])
-        .map((v: string) => screenLabels[v] || v)
-        .join(" → ");
-      const uiItem = pricing.items.find((item) => item.moduleCode === "UI_BASIC");
-      if (uiItem) {
+    // UI_BASIC 항목에 화면 구성 설명 적용 + 디바이스에 따라 항목명 변경
+    const uiItem = pricing.items.find((item) => item.moduleCode === "UI_BASIC");
+    if (uiItem) {
+      if (screenDevice === "tablet") {
+        uiItem.moduleName = "태블릿 UI 개발";
+      } else if (screenDevice === "laptop") {
+        uiItem.moduleName = "노트북 UI 개발";
+      }
+      if (screenComposition?.length > 0) {
+        const flowDesc = (screenComposition as string[])
+          .map((v: string) => screenLabels[v] || v)
+          .join(" → ");
         uiItem.description = flowDesc;
       }
     }

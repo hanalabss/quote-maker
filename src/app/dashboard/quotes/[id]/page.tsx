@@ -616,8 +616,8 @@ export default function QuoteDetailPage({
                             <div className="text-xs text-gray-500">{item.description}</div>
                           )}
                         </td>
-                        {showPrice && <td className="py-2.5 text-right">{formatKRW(item.unitPrice)}원</td>}
-                        {showPrice && <td className="py-2.5 text-right font-medium">{formatKRW(item.amount)}원</td>}
+                        {showPrice && <td className="py-2.5 text-right whitespace-nowrap">{formatKRW(item.unitPrice)}원</td>}
+                        {showPrice && <td className="py-2.5 text-right font-medium whitespace-nowrap">{formatKRW(item.amount)}원</td>}
                       </tr>
                     ))}
                   </tbody>
@@ -625,15 +625,15 @@ export default function QuoteDetailPage({
                   <tfoot>
                     <tr className="border-t">
                       <td colSpan={3} className="py-2 text-gray-500">소계</td>
-                      <td className="py-2 text-right">{formatKRW(quote.subtotal)}원</td>
+                      <td className="py-2 text-right whitespace-nowrap">{formatKRW(quote.subtotal)}원</td>
                     </tr>
                     <tr>
                       <td colSpan={3} className="py-2 text-gray-500">VAT (10%)</td>
-                      <td className="py-2 text-right">{formatKRW(quote.vat)}원</td>
+                      <td className="py-2 text-right whitespace-nowrap">{formatKRW(quote.vat)}원</td>
                     </tr>
                     <tr className="border-t">
                       <td colSpan={3} className="py-2 font-bold">합계 (VAT 포함)</td>
-                      <td className="py-2 text-right font-bold text-lg text-blue-600">
+                      <td className="py-2 text-right font-bold text-lg text-blue-600 whitespace-nowrap">
                         {formatKRW(quote.totalAmount)}원
                       </td>
                     </tr>
