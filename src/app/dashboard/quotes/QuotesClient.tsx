@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Clock, CheckCircle, XCircle, Eye, Search } from "lucide-react";
+import { Clock, CheckCircle, XCircle, Eye, Search, CalendarCheck, Ban } from "lucide-react";
 import { formatKRW } from "@/lib/pricing";
 import type { QuoteStatus, QuoteType } from "@/types";
 import { STATUS_LABELS, STATUS_COLORS, TYPE_LABELS, TYPE_COLORS } from "@/types";
@@ -18,6 +18,14 @@ interface QuoteListItem {
   totalAmount: number;
   createdAt: string;
   createdBy?: { name: string; team: string | null } | null;
+  devDeadline?: string | null;
+}
+
+function getDday(deadline: string) {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const d = new Date(deadline + "T00:00:00");
+  return Math.ceil((d.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
 }
 
 const FILTERS = [
@@ -25,6 +33,8 @@ const FILTERS = [
   { value: "pending", label: "대기중" },
   { value: "reviewing", label: "검토중" },
   { value: "approved", label: "승인" },
+  { value: "confirmed", label: "확정" },
+  { value: "lost", label: "미진행" },
   { value: "rejected", label: "반려" },
 ];
 
@@ -68,7 +78,7 @@ export function QuotesClient({
       </div>
 
       {/* 상태 요약 카드 */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
+      <div className="grid grid-cols-3 sm:grid-cols-6 gap-3 mb-6">
         <div className="bg-white rounded-xl p-4 border">
           <div className="flex items-center gap-2 text-yellow-600 mb-1">
             <Clock className="w-4 h-4" />
@@ -89,6 +99,20 @@ export function QuotesClient({
             <span className="text-sm">승인</span>
           </div>
           <p className="text-xl sm:text-2xl font-bold">{statusCounts["approved"] || 0}</p>
+        </div>
+        <div className="bg-white rounded-xl p-4 border">
+          <div className="flex items-center gap-2 text-emerald-600 mb-1">
+            <CalendarCheck className="w-4 h-4" />
+            <span className="text-sm">확정</span>
+          </div>
+          <p className="text-xl sm:text-2xl font-bold">{statusCounts["confirmed"] || 0}</p>
+        </div>
+        <div className="bg-white rounded-xl p-4 border">
+          <div className="flex items-center gap-2 text-gray-500 mb-1">
+            <Ban className="w-4 h-4" />
+            <span className="text-sm">미진행</span>
+          </div>
+          <p className="text-xl sm:text-2xl font-bold">{statusCounts["lost"] || 0}</p>
         </div>
         <div className="bg-white rounded-xl p-4 border">
           <div className="flex items-center gap-2 text-red-600 mb-1">
@@ -188,6 +212,12 @@ export function QuotesClient({
                       >
                         {STATUS_LABELS[q.status as QuoteStatus]}
                       </span>
+                      {q.status === "confirmed" && q.devDeadline && (() => {
+                        const diff = getDday(q.devDeadline);
+                        if (diff < 0) return <span className="ml-1 text-xs text-red-600 font-bold">{Math.abs(diff)}일 초과</span>;
+                        if (diff === 0) return <span className="ml-1 text-xs text-red-600 font-bold">오늘</span>;
+                        return <span className={`ml-1 text-xs font-bold ${diff <= 3 ? "text-red-600" : "text-amber-600"}`}>D-{diff}</span>;
+                      })()}
                     </td>
                     <td className="px-3 sm:px-4 py-3 text-sm text-gray-500 text-center hidden md:table-cell">
                       {new Date(q.createdAt).toLocaleDateString("ko-KR")}

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { getAuthUser, requireDev } from "@/lib/auth";
+import { getAuthUser, requireDev, requireAuth } from "@/lib/auth";
+import { sendApprovalNotification, sendConfirmationNotification } from "@/lib/email";
 
 export async function GET(
   request: NextRequest,
@@ -43,8 +44,7 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-  // dev role만 수정 가능
-  const authResult = await requireDev();
+  const authResult = await requireAuth();
   if ("error" in authResult) {
     return NextResponse.json({ error: authResult.error }, { status: authResult.status });
   }
@@ -60,15 +60,36 @@ export async function PATCH(
 
   // 상태 변경
   if (body.status) {
-    // 상태 전이 규칙 검증
-    const validTransitions: Record<string, string[]> = {
+    // 사업팀 전용 전이: approved ↔ confirmed / lost
+    const salesTransitions: Record<string, string[]> = {
+      approved: ["confirmed", "lost"],
+      confirmed: ["approved"],
+      lost: ["approved"],
+    };
+    // 개발팀 전용 전이
+    const devTransitions: Record<string, string[]> = {
       pending: ["reviewing"],
       reviewing: ["approved", "rejected"],
       approved: ["reviewing"],
       rejected: ["pending"],
     };
-    const allowed = validTransitions[quote.status];
-    if (!allowed || !allowed.includes(body.status)) {
+
+    const isSalesTransition = salesTransitions[quote.status]?.includes(body.status);
+    const isDevTransition = devTransitions[quote.status]?.includes(body.status);
+
+    if (isSalesTransition) {
+      // 사업팀: 본인 견적만 확정/미진행 가능
+      if (user.role !== "sales" && user.role !== "dev") {
+        return NextResponse.json({ error: "권한이 없습니다" }, { status: 403 });
+      }
+      if (user.role === "sales" && quote.createdById !== user.id) {
+        return NextResponse.json({ error: "본인 견적만 변경할 수 있습니다" }, { status: 403 });
+      }
+    } else if (isDevTransition) {
+      if (user.role !== "dev") {
+        return NextResponse.json({ error: "권한이 없습니다" }, { status: 403 });
+      }
+    } else {
       return NextResponse.json(
         { error: `현재 상태(${quote.status})에서 ${body.status}(으)로 변경할 수 없습니다.` },
         { status: 400 }
@@ -77,25 +98,91 @@ export async function PATCH(
 
     const updateData: Record<string, unknown> = {
       status: body.status,
-      reviewedById: user.id,
     };
-    if (body.status === "rejected" && body.rejectionReason) {
-      updateData.rejectionReason = body.rejectionReason;
+
+    // dev 상태 변경
+    if (isDevTransition) {
+      updateData.reviewedById = user.id;
+      if (body.status === "rejected" && body.rejectionReason) {
+        updateData.rejectionReason = body.rejectionReason;
+      }
+      if (body.reviewNote) {
+        updateData.reviewNote = body.reviewNote;
+      }
     }
-    if (body.reviewNote) {
-      updateData.reviewNote = body.reviewNote;
+
+    // 확정 처리
+    if (body.status === "confirmed") {
+      if (!body.confirmedDate || !body.devDeadline) {
+        return NextResponse.json(
+          { error: "최종 행사일과 개발 마감일을 입력해주세요" },
+          { status: 400 }
+        );
+      }
+      updateData.confirmedAt = new Date();
+      updateData.confirmedDate = body.confirmedDate;
+      updateData.devDeadline = body.devDeadline;
+    }
+
+    // 미진행 처리
+    if (body.status === "lost") {
+      updateData.lostReason = body.lostReason || null;
+    }
+
+    // 승인으로 복원 (confirmed/lost → approved)
+    if (body.status === "approved" && (quote.status === "confirmed" || quote.status === "lost")) {
+      updateData.confirmedAt = null;
+      updateData.confirmedDate = null;
+      updateData.devDeadline = null;
+      updateData.lostReason = null;
     }
 
     const updated = await prisma.quote.update({
       where: { id },
       data: updateData,
-      include: { items: { orderBy: { sortOrder: "asc" } } },
+      include: {
+        items: { orderBy: { sortOrder: "asc" } },
+        createdBy: { select: { name: true, team: true, email: true } },
+      },
     });
+
+    // 승인 시 → 사업팀(요청자)에게 이메일
+    if (body.status === "approved") {
+      const quoteUrl = `${process.env.NEXT_PUBLIC_APP_URL}/dashboard/quotes/${id}`;
+      sendApprovalNotification({
+        quoteNumber: quote.quoteNumber,
+        eventName: quote.eventName,
+        requesterName: quote.requesterName,
+        totalAmount: updated.totalAmount,
+        quoteUrl,
+        requesterEmail: quote.requesterEmail || "",
+        reviewNote: updated.reviewNote,
+      }).catch((err) => console.error("[Email] 승인 알림 실패:", err));
+    }
+
+    // 확정 시 → 개발팀에게 이메일
+    if (body.status === "confirmed") {
+      const quoteUrl = `${process.env.NEXT_PUBLIC_APP_URL}/dashboard/quotes/${id}`;
+      sendConfirmationNotification({
+        quoteNumber: quote.quoteNumber,
+        eventName: quote.eventName,
+        requesterName: quote.requesterName,
+        totalAmount: quote.totalAmount,
+        quoteUrl,
+        confirmedDate: body.confirmedDate,
+        devDeadline: body.devDeadline,
+      }).catch((err) => console.error("[Email] 확정 알림 실패:", err));
+    }
+
     return NextResponse.json(updated);
   }
 
   // 항목 수정 (개발팀 검토 시)
   if (body.items) {
+    if (user.role !== "dev") {
+      return NextResponse.json({ error: "권한이 없습니다" }, { status: 403 });
+    }
+
     // 기존 항목 삭제 후 재생성
     await prisma.quoteItem.deleteMany({ where: { quoteId: id } });
 

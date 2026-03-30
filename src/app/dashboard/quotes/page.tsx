@@ -35,6 +35,7 @@ export default async function QuotesPage() {
     totalAmount: showPrice ? q.totalAmount : 0,
     createdAt: q.createdAt.toISOString(),
     createdBy: q.createdBy,
+    devDeadline: q.devDeadline,
   }));
 
   return <QuotesClient quotes={serialized} userRole={user.role} showPrice={showPrice} />;

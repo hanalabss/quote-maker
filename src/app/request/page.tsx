@@ -132,6 +132,8 @@ export default function RequestPage() {
           setForm((prev) => ({
             ...prev,
             requesterName: prev.requesterName || data.name,
+            requesterEmail: prev.requesterEmail || data.email || "",
+            requesterContact: prev.requesterContact || data.phone || "",
           }));
         }
       });

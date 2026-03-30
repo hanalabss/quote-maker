@@ -68,6 +68,12 @@ model Quote {
   printSize         String?
   ksnetMerchantId   String?  // KSNET 가맹점번호
 
+  // 확정 정보 (사업팀이 클라이언트 확인 후 입력)
+  confirmedAt     DateTime?  // 확정일시
+  confirmedDate   String?    // 최종 행사일 (확정 후)
+  devDeadline     String?    // 개발 마감일
+  lostReason      String?    // 미진행 사유
+
   // 숨김 (요청자가 삭제 시 화면에서만 숨김, DB 유지)
   isHidden        Boolean  @default(false)
 

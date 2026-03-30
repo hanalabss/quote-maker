@@ -21,6 +21,9 @@ import {
   Music,
   MessageCircle,
   Send,
+  CalendarCheck,
+  Ban,
+  Clock,
 } from "lucide-react";
 import { formatKRW } from "@/lib/pricing";
 import type { QuoteStatus, QuoteType } from "@/types";
@@ -61,6 +64,10 @@ interface QuoteDetail {
   notes: string | null;
   reviewNote: string | null;
   rejectionReason: string | null;
+  confirmedAt: string | null;
+  confirmedDate: string | null;
+  devDeadline: string | null;
+  lostReason: string | null;
   subtotal: number;
   vat: number;
   totalAmount: number;
@@ -95,6 +102,11 @@ export default function QuoteDetailPage({
   const [showRejectModal, setShowRejectModal] = useState(false);
   const [saving, setSaving] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [showConfirmModal, setShowConfirmModal] = useState(false);
+  const [showLostModal, setShowLostModal] = useState(false);
+  const [confirmedDate, setConfirmedDate] = useState("");
+  const [devDeadline, setDevDeadline] = useState("");
+  const [lostReason, setLostReason] = useState("");
   const [comments, setComments] = useState<QuoteCommentType[]>([]);
   const [newComment, setNewComment] = useState("");
   const [commentSaving, setCommentSaving] = useState(false);
@@ -148,10 +160,9 @@ export default function QuoteDetailPage({
     setCommentSaving(false);
   }
 
-  async function updateStatus(status: string, reason?: string) {
+  async function updateStatus(status: string, extra?: Record<string, string>) {
     setSaving(true);
-    const body: Record<string, string> = { status };
-    if (reason) body.rejectionReason = reason;
+    const body: Record<string, string> = { status, ...extra };
     if (reviewNote) body.reviewNote = reviewNote;
 
     const res = await fetch(`/api/quotes/${id}`, {
@@ -160,9 +171,15 @@ export default function QuoteDetailPage({
       body: JSON.stringify(body),
     });
     const data = await res.json();
-    setQuote(data);
+    if (res.ok) {
+      setQuote(data);
+    } else {
+      alert(data.error || "상태 변경에 실패했습니다");
+    }
     setSaving(false);
     setShowRejectModal(false);
+    setShowConfirmModal(false);
+    setShowLostModal(false);
   }
 
   async function saveItems() {
@@ -678,6 +695,96 @@ export default function QuoteDetailPage({
             </div>
           )}
 
+          {/* 확정 정보 표시 */}
+          {quote.status === "confirmed" && (
+            <div className="bg-emerald-50 rounded-xl border border-emerald-200 p-5">
+              <h3 className="font-medium text-emerald-800 mb-3 flex items-center gap-2">
+                <CalendarCheck className="w-4 h-4" />
+                행사 확정 정보
+              </h3>
+              <dl className="space-y-2 text-sm">
+                <div className="flex justify-between">
+                  <dt className="text-emerald-600">최종 행사일</dt>
+                  <dd className="font-medium">{quote.confirmedDate}</dd>
+                </div>
+                <div className="flex justify-between">
+                  <dt className="text-emerald-600">개발 마감일</dt>
+                  <dd className="font-bold text-red-600 flex items-center gap-1.5">
+                    <Clock className="w-3.5 h-3.5" />
+                    {quote.devDeadline}
+                    {quote.devDeadline && (() => {
+                      const today = new Date();
+                      today.setHours(0, 0, 0, 0);
+                      const deadline = new Date(quote.devDeadline + "T00:00:00");
+                      const diff = Math.ceil((deadline.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+                      if (diff < 0) return <span className="text-xs bg-red-100 text-red-700 px-1.5 py-0.5 rounded">{Math.abs(diff)}일 초과</span>;
+                      if (diff === 0) return <span className="text-xs bg-red-100 text-red-700 px-1.5 py-0.5 rounded">오늘 마감</span>;
+                      return <span className="text-xs bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded">D-{diff}</span>;
+                    })()}
+                  </dd>
+                </div>
+                {quote.confirmedAt && (
+                  <div className="flex justify-between">
+                    <dt className="text-emerald-600">확정일</dt>
+                    <dd className="text-gray-600">{new Date(quote.confirmedAt).toLocaleDateString("ko-KR")}</dd>
+                  </div>
+                )}
+              </dl>
+            </div>
+          )}
+
+          {/* 미진행 사유 표시 */}
+          {quote.status === "lost" && (
+            <div className="bg-gray-50 rounded-xl border border-gray-200 p-5">
+              <h3 className="font-medium text-gray-600 mb-2 flex items-center gap-2">
+                <Ban className="w-4 h-4" />
+                미진행 처리됨
+              </h3>
+              {quote.lostReason && <p className="text-sm text-gray-500">{quote.lostReason}</p>}
+            </div>
+          )}
+
+          {/* 확정/미진행 → 승인으로 되돌리기 */}
+          {(quote.status === "confirmed" || quote.status === "lost") && (user?.role === "sales" || user?.role === "dev") && (
+            <div className="flex flex-wrap gap-2 sm:gap-3">
+              <button
+                onClick={() => updateStatus("approved")}
+                disabled={saving}
+                className="flex items-center gap-1.5 px-3 sm:px-5 py-2 sm:py-2.5 text-sm bg-amber-600 text-white rounded-lg hover:bg-amber-700 disabled:opacity-50 transition-colors"
+              >
+                <RotateCcw className="w-4 h-4" />
+                승인 상태로 되돌리기
+              </button>
+            </div>
+          )}
+
+          {/* 사업팀 확정/미진행 버튼 - approved 상태일 때 */}
+          {quote.status === "approved" && (user?.role === "sales" || user?.role === "dev") && (
+            <div className="bg-amber-50 rounded-xl border border-amber-200 p-5">
+              <p className="text-sm text-amber-800 mb-4">
+                클라이언트 확인 후 <strong>확정</strong> 또는 <strong>미진행</strong>을 선택해주세요.
+              </p>
+              <div className="flex flex-wrap gap-2 sm:gap-3">
+                <button
+                  onClick={() => setShowConfirmModal(true)}
+                  disabled={saving}
+                  className="flex items-center gap-1.5 px-3 sm:px-5 py-2 sm:py-2.5 text-sm bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 disabled:opacity-50 transition-colors"
+                >
+                  <CalendarCheck className="w-4 h-4" />
+                  행사 확정
+                </button>
+                <button
+                  onClick={() => setShowLostModal(true)}
+                  disabled={saving}
+                  className="flex items-center gap-1.5 px-3 sm:px-5 py-2 sm:py-2.5 text-sm bg-gray-500 text-white rounded-lg hover:bg-gray-600 disabled:opacity-50 transition-colors"
+                >
+                  <Ban className="w-4 h-4" />
+                  미진행
+                </button>
+              </div>
+            </div>
+          )}
+
           {/* 댓글 섹션 */}
           <div className="bg-white rounded-xl border p-5">
             <h3 className="font-medium mb-4 flex items-center gap-1.5">
@@ -835,6 +942,87 @@ export default function QuoteDetailPage({
         </div>
       )}
 
+      {/* 확정 모달 */}
+      {showConfirmModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={() => setShowConfirmModal(false)} onKeyDown={(e) => { if (e.key === "Escape") setShowConfirmModal(false); }}>
+          <div className="bg-white rounded-2xl p-6 max-w-md w-full" role="dialog" aria-modal="true" aria-labelledby="confirm-title" onClick={(e) => e.stopPropagation()}>
+            <h3 id="confirm-title" className="text-lg font-semibold mb-4 flex items-center gap-2">
+              <CalendarCheck className="w-5 h-5 text-emerald-600" />
+              행사 확정
+            </h3>
+            <div className="space-y-4">
+              <div>
+                <label htmlFor="confirmedDate" className="block text-sm font-medium text-gray-700 mb-1">최종 행사일 <span className="text-red-500">*</span></label>
+                <input
+                  id="confirmedDate"
+                  type="date"
+                  value={confirmedDate}
+                  onChange={(e) => setConfirmedDate(e.target.value)}
+                  className="w-full px-4 py-2.5 border rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 outline-none"
+                />
+              </div>
+              <div>
+                <label htmlFor="devDeadline" className="block text-sm font-medium text-gray-700 mb-1">개발 마감일 <span className="text-red-500">*</span></label>
+                <input
+                  id="devDeadline"
+                  type="date"
+                  value={devDeadline}
+                  onChange={(e) => setDevDeadline(e.target.value)}
+                  className="w-full px-4 py-2.5 border rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 outline-none"
+                />
+                <p className="text-xs text-gray-400 mt-1">개발팀이 준비를 완료해야 하는 날짜</p>
+              </div>
+            </div>
+            <div className="flex gap-2 justify-end mt-6">
+              <button
+                onClick={() => setShowConfirmModal(false)}
+                className="px-4 py-2 text-sm border rounded-lg hover:bg-gray-50"
+              >
+                취소
+              </button>
+              <button
+                onClick={() => updateStatus("confirmed", { confirmedDate, devDeadline })}
+                disabled={!confirmedDate || !devDeadline || saving}
+                className="px-4 py-2 text-sm bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 disabled:opacity-50"
+              >
+                {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : "확정"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 미진행 모달 */}
+      {showLostModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={() => setShowLostModal(false)} onKeyDown={(e) => { if (e.key === "Escape") setShowLostModal(false); }}>
+          <div className="bg-white rounded-2xl p-6 max-w-md w-full" role="dialog" aria-modal="true" aria-labelledby="lost-title" onClick={(e) => e.stopPropagation()}>
+            <h3 id="lost-title" className="text-lg font-semibold mb-4">미진행 처리</h3>
+            <textarea
+              value={lostReason}
+              onChange={(e) => setLostReason(e.target.value)}
+              rows={3}
+              placeholder="미진행 사유를 입력해주세요 (선택)"
+              className="w-full px-4 py-2.5 border rounded-lg text-sm focus:ring-2 focus:ring-gray-500 outline-none resize-none mb-4"
+            />
+            <div className="flex gap-2 justify-end">
+              <button
+                onClick={() => setShowLostModal(false)}
+                className="px-4 py-2 text-sm border rounded-lg hover:bg-gray-50"
+              >
+                취소
+              </button>
+              <button
+                onClick={() => updateStatus("lost", { lostReason })}
+                disabled={saving}
+                className="px-4 py-2 text-sm bg-gray-600 text-white rounded-lg hover:bg-gray-700 disabled:opacity-50"
+              >
+                미진행 확정
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* 반려 모달 */}
       {showRejectModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={() => setShowRejectModal(false)} onKeyDown={(e) => { if (e.key === "Escape") setShowRejectModal(false); }}>
@@ -855,7 +1043,7 @@ export default function QuoteDetailPage({
                 취소
               </button>
               <button
-                onClick={() => updateStatus("rejected", rejectionReason)}
+                onClick={() => updateStatus("rejected", { rejectionReason })}
                 disabled={!rejectionReason || saving}
                 className="px-4 py-2 text-sm bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50"
               >

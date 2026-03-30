@@ -5,9 +5,11 @@ export interface AuthUser {
   id: string;
   loginId: string;
   name: string;
+  email: string;
   role: string;
   team: string | null;
   position: string | null;
+  phone: string | null;
 }
 
 /**
@@ -35,9 +37,11 @@ export async function getAuthUser(): Promise<AuthUser | null> {
       id: true,
       loginId: true,
       name: true,
+      email: true,
       role: true,
       team: true,
       position: true,
+      phone: true,
     },
   });
 
