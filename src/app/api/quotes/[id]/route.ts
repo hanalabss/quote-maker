@@ -113,14 +113,15 @@ export async function PATCH(
 
     // 확정 처리
     if (body.status === "confirmed") {
-      if (!body.confirmedDate || !body.devDeadline) {
+      if (!body.devDeadline) {
         return NextResponse.json(
-          { error: "최종 행사일과 개발 마감일을 입력해주세요" },
+          { error: "개발 마감일을 입력해주세요" },
           { status: 400 }
         );
       }
       updateData.confirmedAt = new Date();
-      updateData.confirmedDate = body.confirmedDate;
+      updateData.confirmedDate = body.confirmedDate || null;
+      updateData.confirmedEndDate = body.confirmedEndDate || null;
       updateData.devDeadline = body.devDeadline;
     }
 
@@ -133,6 +134,7 @@ export async function PATCH(
     if (body.status === "approved" && (quote.status === "confirmed" || quote.status === "lost")) {
       updateData.confirmedAt = null;
       updateData.confirmedDate = null;
+      updateData.confirmedEndDate = null;
       updateData.devDeadline = null;
       updateData.lostReason = null;
     }

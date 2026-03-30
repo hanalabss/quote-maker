@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { FileText, Package, UserCircle } from "lucide-react";
+import { FileText, Package, UserCircle, CalendarDays } from "lucide-react";
 
 export function DashboardShell({
   isDev,
@@ -44,6 +44,14 @@ export function DashboardShell({
               >
                 <FileText className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                 견적
+              </Link>
+              <Link
+                href="/dashboard/calendar"
+                className={navLinkClass("/dashboard/calendar")}
+                aria-current={pathname.startsWith("/dashboard/calendar") ? "page" : undefined}
+              >
+                <CalendarDays className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                달력
               </Link>
               {isDev && (
                 <Link

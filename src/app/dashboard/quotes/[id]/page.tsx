@@ -66,6 +66,7 @@ interface QuoteDetail {
   rejectionReason: string | null;
   confirmedAt: string | null;
   confirmedDate: string | null;
+  confirmedEndDate: string | null;
   devDeadline: string | null;
   lostReason: string | null;
   subtotal: number;
@@ -105,6 +106,7 @@ export default function QuoteDetailPage({
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [showLostModal, setShowLostModal] = useState(false);
   const [confirmedDate, setConfirmedDate] = useState("");
+  const [confirmedEndDate, setConfirmedEndDate] = useState("");
   const [devDeadline, setDevDeadline] = useState("");
   const [lostReason, setLostReason] = useState("");
   const [comments, setComments] = useState<QuoteCommentType[]>([]);
@@ -703,10 +705,15 @@ export default function QuoteDetailPage({
                 행사 확정 정보
               </h3>
               <dl className="space-y-2 text-sm">
-                <div className="flex justify-between">
-                  <dt className="text-emerald-600">최종 행사일</dt>
-                  <dd className="font-medium">{quote.confirmedDate}</dd>
-                </div>
+                {quote.confirmedDate && (
+                  <div className="flex justify-between">
+                    <dt className="text-emerald-600">행사 기간</dt>
+                    <dd className="font-medium">
+                      {quote.confirmedDate}
+                      {quote.confirmedEndDate && quote.confirmedEndDate !== quote.confirmedDate && ` ~ ${quote.confirmedEndDate}`}
+                    </dd>
+                  </div>
+                )}
                 <div className="flex justify-between">
                   <dt className="text-emerald-600">개발 마감일</dt>
                   <dd className="font-bold text-red-600 flex items-center gap-1.5">
@@ -766,7 +773,33 @@ export default function QuoteDetailPage({
               </p>
               <div className="flex flex-wrap gap-2 sm:gap-3">
                 <button
-                  onClick={() => setShowConfirmModal(true)}
+                  onClick={() => {
+                    // 기본값 세팅
+                    setConfirmedDate(quote.eventDate || "");
+                    setConfirmedEndDate(quote.eventEndDate || quote.eventDate || "");
+                    // devDeadline 자동 계산: 행사일 2주 전, 2주 미만이면 1주 전, 1주 미만이면 오늘
+                    const eventStart = quote.eventDate ? new Date(quote.eventDate + "T00:00:00") : null;
+                    if (eventStart) {
+                      const today = new Date();
+                      today.setHours(0, 0, 0, 0);
+                      const twoWeeksBefore = new Date(eventStart);
+                      twoWeeksBefore.setDate(twoWeeksBefore.getDate() - 14);
+                      const oneWeekBefore = new Date(eventStart);
+                      oneWeekBefore.setDate(oneWeekBefore.getDate() - 7);
+                      let deadline: Date;
+                      if (twoWeeksBefore >= today) {
+                        deadline = twoWeeksBefore;
+                      } else if (oneWeekBefore >= today) {
+                        deadline = oneWeekBefore;
+                      } else {
+                        deadline = today;
+                      }
+                      setDevDeadline(deadline.toISOString().split("T")[0]);
+                    } else {
+                      setDevDeadline("");
+                    }
+                    setShowConfirmModal(true);
+                  }}
                   disabled={saving}
                   className="flex items-center gap-1.5 px-3 sm:px-5 py-2 sm:py-2.5 text-sm bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 disabled:opacity-50 transition-colors"
                 >
@@ -951,16 +984,30 @@ export default function QuoteDetailPage({
               행사 확정
             </h3>
             <div className="space-y-4">
-              <div>
-                <label htmlFor="confirmedDate" className="block text-sm font-medium text-gray-700 mb-1">최종 행사일 <span className="text-red-500">*</span></label>
-                <input
-                  id="confirmedDate"
-                  type="date"
-                  value={confirmedDate}
-                  onChange={(e) => setConfirmedDate(e.target.value)}
-                  className="w-full px-4 py-2.5 border rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 outline-none"
-                />
-              </div>
+              {quote.type !== "sale" && (
+                <>
+                  <div>
+                    <label htmlFor="confirmedDate" className="block text-sm font-medium text-gray-700 mb-1">행사 시작일 <span className="text-red-500">*</span></label>
+                    <input
+                      id="confirmedDate"
+                      type="date"
+                      value={confirmedDate}
+                      onChange={(e) => setConfirmedDate(e.target.value)}
+                      className="w-full px-4 py-2.5 border rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 outline-none"
+                    />
+                  </div>
+                  <div>
+                    <label htmlFor="confirmedEndDate" className="block text-sm font-medium text-gray-700 mb-1">행사 종료일 <span className="text-red-500">*</span></label>
+                    <input
+                      id="confirmedEndDate"
+                      type="date"
+                      value={confirmedEndDate}
+                      onChange={(e) => setConfirmedEndDate(e.target.value)}
+                      className="w-full px-4 py-2.5 border rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 outline-none"
+                    />
+                  </div>
+                </>
+              )}
               <div>
                 <label htmlFor="devDeadline" className="block text-sm font-medium text-gray-700 mb-1">개발 마감일 <span className="text-red-500">*</span></label>
                 <input
@@ -970,7 +1017,7 @@ export default function QuoteDetailPage({
                   onChange={(e) => setDevDeadline(e.target.value)}
                   className="w-full px-4 py-2.5 border rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 outline-none"
                 />
-                <p className="text-xs text-gray-400 mt-1">개발팀이 준비를 완료해야 하는 날짜</p>
+                <p className="text-xs text-gray-400 mt-1">개발팀이 준비를 완료해야 하는 날짜 (행사 2주 전 자동 계산)</p>
               </div>
             </div>
             <div className="flex gap-2 justify-end mt-6">
@@ -981,8 +1028,16 @@ export default function QuoteDetailPage({
                 취소
               </button>
               <button
-                onClick={() => updateStatus("confirmed", { confirmedDate, devDeadline })}
-                disabled={!confirmedDate || !devDeadline || saving}
+                onClick={() => updateStatus("confirmed", {
+                  confirmedDate: quote.type === "sale" ? new Date().toISOString().split("T")[0] : confirmedDate,
+                  confirmedEndDate,
+                  devDeadline,
+                })}
+                disabled={
+                  (quote.type !== "sale" && (!confirmedDate || !confirmedEndDate)) ||
+                  !devDeadline ||
+                  saving
+                }
                 className="px-4 py-2 text-sm bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 disabled:opacity-50"
               >
                 {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : "확정"}
