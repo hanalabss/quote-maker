@@ -41,3 +41,8 @@ prisma/dev.db-journal
 # uploads
 /uploads/*
 !/uploads/.gitkeep
+
+# claude code
+.claude/settings.local.json
+.playwright-mcp/
+.serena/
