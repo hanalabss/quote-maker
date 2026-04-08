@@ -148,10 +148,10 @@ export async function PATCH(
       },
     });
 
-    // 승인 시 → 사업팀(요청자)에게 이메일
+    // 승인 시 → 요청자 + 개발팀에게 이메일
     if (body.status === "approved") {
       const quoteUrl = `${process.env.NEXT_PUBLIC_APP_URL}/dashboard/quotes/${id}`;
-      sendApprovalNotification({
+      await sendApprovalNotification({
         quoteNumber: quote.quoteNumber,
         eventName: quote.eventName,
         requesterName: quote.requesterName,
@@ -162,10 +162,10 @@ export async function PATCH(
       }).catch((err) => console.error("[Email] 승인 알림 실패:", err));
     }
 
-    // 확정 시 → 개발팀에게 이메일
+    // 확정 시 → 개발팀 + 요청자에게 이메일
     if (body.status === "confirmed") {
       const quoteUrl = `${process.env.NEXT_PUBLIC_APP_URL}/dashboard/quotes/${id}`;
-      sendConfirmationNotification({
+      await sendConfirmationNotification({
         quoteNumber: quote.quoteNumber,
         eventName: quote.eventName,
         requesterName: quote.requesterName,
@@ -173,6 +173,7 @@ export async function PATCH(
         quoteUrl,
         confirmedDate: body.confirmedDate,
         devDeadline: body.devDeadline,
+        requesterEmail: quote.requesterEmail || "",
       }).catch((err) => console.error("[Email] 확정 알림 실패:", err));
     }
 

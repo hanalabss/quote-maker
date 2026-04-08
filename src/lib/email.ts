@@ -24,6 +24,7 @@ interface ConfirmationNotificationData {
   quoteUrl: string;
   confirmedDate: string;
   devDeadline: string;
+  requesterEmail?: string;
 }
 
 async function sendEmail(to: string, subject: string, html: string) {
@@ -114,13 +115,8 @@ export async function sendQuoteNotification(data: QuoteNotificationData) {
   );
 }
 
-// 승인 시 → 사업팀(요청자)에게
+// 승인 시 → 요청자 + 개발팀에게
 export async function sendApprovalNotification(data: ApprovalNotificationData) {
-  if (!data.requesterEmail) {
-    console.log("[Email] 요청자 이메일 없음 - 승인 알림 건너뜀:", data.quoteNumber);
-    return null;
-  }
-
   const reviewNoteHtml = data.reviewNote
     ? `<div style="margin: 16px 0; padding: 12px 16px; background: #f8fafc; border-left: 3px solid #f59e0b; border-radius: 4px;">
         <div style="font-size: 12px; color: #92400e; margin-bottom: 4px; font-weight: bold;">개발팀 검토 메모</div>
@@ -128,46 +124,58 @@ export async function sendApprovalNotification(data: ApprovalNotificationData) {
       </div>`
     : "";
 
-  return sendEmail(
-    data.requesterEmail,
-    `[견적승인] ${data.eventName} - 견적이 승인되었습니다`,
-    emailLayout("견적이 승인되었습니다", `
-      ${infoTable([
-        { label: "견적번호", value: data.quoteNumber },
-        { label: "행사명", value: data.eventName },
-        { label: "요청자", value: data.requesterName },
-        { label: "견적금액(VAT포함)", value: `${new Intl.NumberFormat("ko-KR").format(data.totalAmount)}원`, highlight: true },
-      ])}
-      ${reviewNoteHtml}
-      <p style="font-size: 14px; color: #374151; margin-top: 16px;">
-        클라이언트 확인 후 <strong>확정</strong> 또는 <strong>미진행</strong> 처리를 진행해주세요.
-      </p>
-      ${actionButton(data.quoteUrl, "견적 확인하기")}
-    `)
-  );
-}
+  const htmlContent = emailLayout("견적이 승인되었습니다", `
+    ${infoTable([
+      { label: "견적번호", value: data.quoteNumber },
+      { label: "행사명", value: data.eventName },
+      { label: "요청자", value: data.requesterName },
+      { label: "견적금액(VAT포함)", value: `${new Intl.NumberFormat("ko-KR").format(data.totalAmount)}원`, highlight: true },
+    ])}
+    ${reviewNoteHtml}
+    <p style="font-size: 14px; color: #374151; margin-top: 16px;">
+      클라이언트 확인 후 <strong>확정</strong> 또는 <strong>미진행</strong> 처리를 진행해주세요.
+    </p>
+    ${actionButton(data.quoteUrl, "견적 확인하기")}
+  `);
 
-// 확정 시 → 개발팀 전체(dev + dev_staff)에게
-export async function sendConfirmationNotification(data: ConfirmationNotificationData) {
-  const emails = await getDevEmails(["dev", "dev_staff"]);
-  if (emails.length === 0) {
-    console.log("[Email] 개발팀 유저 없음 - 확정 알림 건너뜀:", data.quoteNumber);
-    return null;
+  const subject = `[견적승인] ${data.eventName} - 견적이 승인되었습니다`;
+
+  // 요청자에게 발송
+  if (data.requesterEmail) {
+    await sendEmail(data.requesterEmail, subject, htmlContent);
   }
 
-  return sendEmail(
-    emails.join(","),
-    `[행사확정] ${data.eventName} - 마감일: ${data.devDeadline}`,
-    emailLayout("행사가 확정되었습니다", `
-      ${infoTable([
-        { label: "견적번호", value: data.quoteNumber },
-        { label: "행사명", value: data.eventName },
-        { label: "요청자", value: data.requesterName },
-        { label: "견적금액(VAT포함)", value: `${new Intl.NumberFormat("ko-KR").format(data.totalAmount)}원`, highlight: true },
-        { label: "최종 행사일", value: data.confirmedDate },
-        { label: "개발 마감일", value: `<strong style="color: #dc2626;">${data.devDeadline}</strong>` },
-      ])}
-      ${actionButton(data.quoteUrl, "견적 상세보기", "#059669")}
-    `)
-  );
+  // 개발팀에게도 발송
+  const devEmails = await getDevEmails(["dev"]);
+  if (devEmails.length > 0) {
+    await sendEmail(devEmails.join(","), subject, htmlContent);
+  }
+}
+
+// 확정 시 → 개발팀 + 요청자에게
+export async function sendConfirmationNotification(data: ConfirmationNotificationData) {
+  const htmlContent = emailLayout("행사가 확정되었습니다", `
+    ${infoTable([
+      { label: "견적번호", value: data.quoteNumber },
+      { label: "행사명", value: data.eventName },
+      { label: "요청자", value: data.requesterName },
+      { label: "견적금액(VAT포함)", value: `${new Intl.NumberFormat("ko-KR").format(data.totalAmount)}원`, highlight: true },
+      { label: "최종 행사일", value: data.confirmedDate },
+      { label: "개발 마감일", value: `<strong style="color: #dc2626;">${data.devDeadline}</strong>` },
+    ])}
+    ${actionButton(data.quoteUrl, "견적 상세보기", "#059669")}
+  `);
+
+  const subject = `[행사확정] ${data.eventName} - 마감일: ${data.devDeadline}`;
+
+  // 개발팀에게 발송
+  const devEmails = await getDevEmails(["dev", "dev_staff"]);
+  if (devEmails.length > 0) {
+    await sendEmail(devEmails.join(","), subject, htmlContent);
+  }
+
+  // 요청자에게도 발송
+  if (data.requesterEmail) {
+    await sendEmail(data.requesterEmail, subject, htmlContent);
+  }
 }
