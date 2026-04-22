@@ -4,6 +4,8 @@
 하나플랫폼의 견적서 자동화 웹 애플리케이션.
 사업팀이 질문지 폼을 입력하면 렌탈/행사 견적서가 자동 생성되고, 개발팀이 검토/승인 후 최종 견적서를 출력하는 시스템.
 
+> **표준 워크플로우**: 견적 검토 → 노션 프로젝트 문서화는 [`docs/PROJECT_SOP.md`](docs/PROJECT_SOP.md) 참조. 거의 모든 프로젝트에 일관 적용.
+
 ## URLs
 - **Production**: https://quote-maker-alpha.vercel.app
 - **GitHub**: https://github.com/hanalabss/quote-maker
