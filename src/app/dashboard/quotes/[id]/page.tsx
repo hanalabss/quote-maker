@@ -777,26 +777,30 @@ export default function QuoteDetailPage({
                     // 기본값 세팅
                     setConfirmedDate(quote.eventDate || "");
                     setConfirmedEndDate(quote.eventEndDate || quote.eventDate || "");
-                    // devDeadline 자동 계산: 행사일 2주 전, 2주 미만이면 1주 전, 1주 미만이면 오늘
-                    const eventStart = quote.eventDate ? new Date(quote.eventDate + "T00:00:00") : null;
-                    if (eventStart) {
-                      const today = new Date();
-                      today.setHours(0, 0, 0, 0);
-                      const twoWeeksBefore = new Date(eventStart);
-                      twoWeeksBefore.setDate(twoWeeksBefore.getDate() - 14);
-                      const oneWeekBefore = new Date(eventStart);
-                      oneWeekBefore.setDate(oneWeekBefore.getDate() - 7);
-                      let deadline: Date;
-                      if (twoWeeksBefore >= today) {
-                        deadline = twoWeeksBefore;
-                      } else if (oneWeekBefore >= today) {
-                        deadline = oneWeekBefore;
-                      } else {
-                        deadline = today;
-                      }
-                      setDevDeadline(deadline.toISOString().split("T")[0]);
+                    // devDeadline 기본값: 요청 시 입력한 납기일 우선, 없으면 행사일 기준 자동 계산
+                    if (quote.deadline) {
+                      setDevDeadline(quote.deadline);
                     } else {
-                      setDevDeadline("");
+                      const eventStart = quote.eventDate ? new Date(quote.eventDate + "T00:00:00") : null;
+                      if (eventStart) {
+                        const today = new Date();
+                        today.setHours(0, 0, 0, 0);
+                        const twoWeeksBefore = new Date(eventStart);
+                        twoWeeksBefore.setDate(twoWeeksBefore.getDate() - 14);
+                        const oneWeekBefore = new Date(eventStart);
+                        oneWeekBefore.setDate(oneWeekBefore.getDate() - 7);
+                        let deadline: Date;
+                        if (twoWeeksBefore >= today) {
+                          deadline = twoWeeksBefore;
+                        } else if (oneWeekBefore >= today) {
+                          deadline = oneWeekBefore;
+                        } else {
+                          deadline = today;
+                        }
+                        setDevDeadline(deadline.toISOString().split("T")[0]);
+                      } else {
+                        setDevDeadline("");
+                      }
                     }
                     setShowConfirmModal(true);
                   }}
@@ -1017,7 +1021,11 @@ export default function QuoteDetailPage({
                   onChange={(e) => setDevDeadline(e.target.value)}
                   className="w-full px-4 py-2.5 border rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 outline-none"
                 />
-                <p className="text-xs text-gray-400 mt-1">개발팀이 준비를 완료해야 하는 날짜 (행사 2주 전 자동 계산)</p>
+                <p className="text-xs text-gray-400 mt-1">
+                  {quote.deadline
+                    ? "요청 시 입력한 납기일이 자동 반영됩니다. 필요 시 수정하세요."
+                    : "개발팀이 준비를 완료해야 하는 날짜 (행사 2주 전 자동 계산)"}
+                </p>
               </div>
             </div>
             <div className="flex gap-2 justify-end mt-6">
@@ -1028,11 +1036,21 @@ export default function QuoteDetailPage({
                 취소
               </button>
               <button
-                onClick={() => updateStatus("confirmed", {
-                  confirmedDate: quote.type === "sale" ? new Date().toISOString().split("T")[0] : confirmedDate,
-                  confirmedEndDate,
-                  devDeadline,
-                })}
+                onClick={() => {
+                  const lines: string[] = [];
+                  if (quote.type !== "sale") {
+                    lines.push(`• 행사 시작일: ${confirmedDate || "(미입력)"}`);
+                    lines.push(`• 행사 종료일: ${confirmedEndDate || "(미입력)"}`);
+                  }
+                  lines.push(`• 개발 마감일: ${devDeadline || "(미입력)"}`);
+                  const msg = `아래 일정이 맞는지 다시 한 번 확인해 주세요.\n\n${lines.join("\n")}\n\n이대로 확정하시겠습니까?`;
+                  if (!window.confirm(msg)) return;
+                  updateStatus("confirmed", {
+                    confirmedDate: quote.type === "sale" ? new Date().toISOString().split("T")[0] : confirmedDate,
+                    confirmedEndDate,
+                    devDeadline,
+                  });
+                }}
                 disabled={
                   (quote.type !== "sale" && (!confirmedDate || !confirmedEndDate)) ||
                   !devDeadline ||

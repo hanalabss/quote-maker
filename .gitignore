@@ -46,3 +46,13 @@ prisma/dev.db-journal
 .claude/settings.local.json
 .playwright-mcp/
 .serena/
+
+# 일회성 DB 조작 스크립트 및 고객 첨부 다운로드 (저장소 제외)
+scripts/find-*.js
+scripts/check-*.js
+scripts/review-*.js
+scripts/cleanup-*.js
+scripts/trim-*.js
+scripts/add-*.js
+scripts/download-*.js
+scripts/*.pdf
