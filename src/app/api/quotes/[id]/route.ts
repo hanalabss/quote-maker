@@ -60,10 +60,11 @@ export async function PATCH(
 
   // 상태 변경
   if (body.status) {
-    // 사업팀 전용 전이: approved ↔ confirmed / lost
+    // 사업팀 전용 전이: approved ↔ confirmed / lost / completed
     const salesTransitions: Record<string, string[]> = {
       approved: ["confirmed", "lost"],
-      confirmed: ["approved"],
+      confirmed: ["approved", "completed"],
+      completed: ["confirmed"],
       lost: ["approved"],
     };
     // 개발팀 전용 전이

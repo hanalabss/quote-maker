@@ -36,6 +36,8 @@ export default async function QuotesPage() {
     createdAt: q.createdAt.toISOString(),
     createdBy: q.createdBy,
     devDeadline: q.devDeadline,
+    confirmedEndDate: q.confirmedEndDate,
+    eventEndDate: q.eventEndDate,
   }));
 
   return <QuotesClient quotes={serialized} userRole={user.role} showPrice={showPrice} />;

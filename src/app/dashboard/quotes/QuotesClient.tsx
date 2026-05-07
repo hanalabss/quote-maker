@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Clock, CheckCircle, XCircle, Eye, Search, CalendarCheck, Ban } from "lucide-react";
+import { Clock, CheckCircle, XCircle, Eye, Search, CalendarCheck, Ban, CheckCheck } from "lucide-react";
 import { formatKRW } from "@/lib/pricing";
 import type { QuoteStatus, QuoteType } from "@/types";
 import { STATUS_LABELS, STATUS_COLORS, TYPE_LABELS, TYPE_COLORS } from "@/types";
@@ -19,6 +19,8 @@ interface QuoteListItem {
   createdAt: string;
   createdBy?: { name: string; team: string | null } | null;
   devDeadline?: string | null;
+  confirmedEndDate?: string | null;
+  eventEndDate?: string | null;
 }
 
 function getDday(deadline: string) {
@@ -34,6 +36,7 @@ const FILTERS = [
   { value: "reviewing", label: "검토중" },
   { value: "approved", label: "승인" },
   { value: "confirmed", label: "확정" },
+  { value: "completed", label: "완료" },
   { value: "lost", label: "미진행" },
   { value: "rejected", label: "반려" },
 ];
@@ -78,7 +81,7 @@ export function QuotesClient({
       </div>
 
       {/* 상태 요약 카드 */}
-      <div className="grid grid-cols-3 sm:grid-cols-6 gap-3 mb-6">
+      <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-7 gap-3 mb-6">
         <div className="bg-white rounded-xl p-4 border">
           <div className="flex items-center gap-2 text-yellow-600 mb-1">
             <Clock className="w-4 h-4" />
@@ -106,6 +109,13 @@ export function QuotesClient({
             <span className="text-sm">확정</span>
           </div>
           <p className="text-xl sm:text-2xl font-bold">{statusCounts["confirmed"] || 0}</p>
+        </div>
+        <div className="bg-white rounded-xl p-4 border">
+          <div className="flex items-center gap-2 text-slate-600 mb-1">
+            <CheckCheck className="w-4 h-4" />
+            <span className="text-sm">완료</span>
+          </div>
+          <p className="text-xl sm:text-2xl font-bold">{statusCounts["completed"] || 0}</p>
         </div>
         <div className="bg-white rounded-xl p-4 border">
           <div className="flex items-center gap-2 text-gray-500 mb-1">
@@ -174,7 +184,7 @@ export function QuotesClient({
                   <th className="text-left px-3 sm:px-4 py-3 text-xs sm:text-sm font-medium text-gray-500 hidden sm:table-cell">요청자</th>
                   {showPrice && <th className="text-right px-3 sm:px-4 py-3 text-xs sm:text-sm font-medium text-gray-500 hidden sm:table-cell">금액</th>}
                   <th className="text-center px-3 sm:px-4 py-3 text-xs sm:text-sm font-medium text-gray-500">상태</th>
-                  <th className="text-center px-3 sm:px-4 py-3 text-xs sm:text-sm font-medium text-gray-500 hidden md:table-cell">요청일</th>
+                  <th className="text-center px-3 sm:px-4 py-3 text-xs sm:text-sm font-medium text-gray-500 hidden md:table-cell">날짜</th>
                 </tr>
               </thead>
               <tbody className="divide-y">
@@ -220,7 +230,24 @@ export function QuotesClient({
                       })()}
                     </td>
                     <td className="px-3 sm:px-4 py-3 text-sm text-gray-500 text-center hidden md:table-cell">
-                      {new Date(q.createdAt).toLocaleDateString("ko-KR")}
+                      {(() => {
+                        const isFinished = q.status === "confirmed" || q.status === "completed";
+                        const endDate = q.confirmedEndDate || q.eventEndDate;
+                        if (isFinished && endDate) {
+                          return (
+                            <>
+                              <div className="text-[10px] text-gray-400">행사 종료</div>
+                              <div>{new Date(endDate + "T00:00:00").toLocaleDateString("ko-KR")}</div>
+                            </>
+                          );
+                        }
+                        return (
+                          <>
+                            <div className="text-[10px] text-gray-400">요청</div>
+                            <div>{new Date(q.createdAt).toLocaleDateString("ko-KR")}</div>
+                          </>
+                        );
+                      })()}
                     </td>
                   </tr>
                 ))}

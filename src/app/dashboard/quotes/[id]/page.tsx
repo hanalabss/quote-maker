@@ -22,6 +22,7 @@ import {
   MessageCircle,
   Send,
   CalendarCheck,
+  CheckCheck,
   Ban,
   Clock,
 } from "lucide-react";
@@ -697,42 +698,50 @@ export default function QuoteDetailPage({
             </div>
           )}
 
-          {/* 확정 정보 표시 */}
-          {quote.status === "confirmed" && (
-            <div className="bg-emerald-50 rounded-xl border border-emerald-200 p-5">
-              <h3 className="font-medium text-emerald-800 mb-3 flex items-center gap-2">
-                <CalendarCheck className="w-4 h-4" />
-                행사 확정 정보
+          {/* 확정/완료 정보 표시 */}
+          {(quote.status === "confirmed" || quote.status === "completed") && (
+            <div className={`${quote.status === "completed" ? "bg-slate-50 border-slate-200" : "bg-emerald-50 border-emerald-200"} rounded-xl border p-5`}>
+              <h3 className={`${quote.status === "completed" ? "text-slate-800" : "text-emerald-800"} font-medium mb-3 flex items-center gap-2`}>
+                {quote.status === "completed" ? <CheckCheck className="w-4 h-4" /> : <CalendarCheck className="w-4 h-4" />}
+                {quote.status === "completed" ? "행사 완료" : "행사 확정 정보"}
               </h3>
               <dl className="space-y-2 text-sm">
                 {quote.confirmedDate && (
                   <div className="flex justify-between">
-                    <dt className="text-emerald-600">행사 기간</dt>
+                    <dt className={quote.status === "completed" ? "text-slate-600" : "text-emerald-600"}>행사 기간</dt>
                     <dd className="font-medium">
                       {quote.confirmedDate}
                       {quote.confirmedEndDate && quote.confirmedEndDate !== quote.confirmedDate && ` ~ ${quote.confirmedEndDate}`}
                     </dd>
                   </div>
                 )}
-                <div className="flex justify-between">
-                  <dt className="text-emerald-600">개발 마감일</dt>
-                  <dd className="font-bold text-red-600 flex items-center gap-1.5">
-                    <Clock className="w-3.5 h-3.5" />
-                    {quote.devDeadline}
-                    {quote.devDeadline && (() => {
-                      const today = new Date();
-                      today.setHours(0, 0, 0, 0);
-                      const deadline = new Date(quote.devDeadline + "T00:00:00");
-                      const diff = Math.ceil((deadline.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
-                      if (diff < 0) return <span className="text-xs bg-red-100 text-red-700 px-1.5 py-0.5 rounded">{Math.abs(diff)}일 초과</span>;
-                      if (diff === 0) return <span className="text-xs bg-red-100 text-red-700 px-1.5 py-0.5 rounded">오늘 마감</span>;
-                      return <span className="text-xs bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded">D-{diff}</span>;
-                    })()}
-                  </dd>
-                </div>
+                {quote.status === "confirmed" && (
+                  <div className="flex justify-between">
+                    <dt className="text-emerald-600">개발 마감일</dt>
+                    <dd className="font-bold text-red-600 flex items-center gap-1.5">
+                      <Clock className="w-3.5 h-3.5" />
+                      {quote.devDeadline}
+                      {quote.devDeadline && (() => {
+                        const today = new Date();
+                        today.setHours(0, 0, 0, 0);
+                        const deadline = new Date(quote.devDeadline + "T00:00:00");
+                        const diff = Math.ceil((deadline.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+                        if (diff < 0) return <span className="text-xs bg-red-100 text-red-700 px-1.5 py-0.5 rounded">{Math.abs(diff)}일 초과</span>;
+                        if (diff === 0) return <span className="text-xs bg-red-100 text-red-700 px-1.5 py-0.5 rounded">오늘 마감</span>;
+                        return <span className="text-xs bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded">D-{diff}</span>;
+                      })()}
+                    </dd>
+                  </div>
+                )}
+                {quote.status === "completed" && quote.devDeadline && (
+                  <div className="flex justify-between">
+                    <dt className="text-slate-600">개발 마감일</dt>
+                    <dd className="text-gray-600">{quote.devDeadline}</dd>
+                  </div>
+                )}
                 {quote.confirmedAt && (
                   <div className="flex justify-between">
-                    <dt className="text-emerald-600">확정일</dt>
+                    <dt className={quote.status === "completed" ? "text-slate-600" : "text-emerald-600"}>확정일</dt>
                     <dd className="text-gray-600">{new Date(quote.confirmedAt).toLocaleDateString("ko-KR")}</dd>
                   </div>
                 )}
@@ -751,8 +760,44 @@ export default function QuoteDetailPage({
             </div>
           )}
 
-          {/* 확정/미진행 → 승인으로 되돌리기 */}
-          {(quote.status === "confirmed" || quote.status === "lost") && (user?.role === "sales" || user?.role === "dev") && (
+          {/* 확정 → 행사 완료 처리 또는 승인으로 되돌리기 */}
+          {quote.status === "confirmed" && (user?.role === "sales" || user?.role === "dev") && (
+            <div className="flex flex-wrap gap-2 sm:gap-3">
+              <button
+                onClick={() => updateStatus("completed")}
+                disabled={saving}
+                className="flex items-center gap-1.5 px-3 sm:px-5 py-2 sm:py-2.5 text-sm bg-slate-700 text-white rounded-lg hover:bg-slate-800 disabled:opacity-50 transition-colors"
+              >
+                <CheckCheck className="w-4 h-4" />
+                행사 완료 처리
+              </button>
+              <button
+                onClick={() => updateStatus("approved")}
+                disabled={saving}
+                className="flex items-center gap-1.5 px-3 sm:px-5 py-2 sm:py-2.5 text-sm bg-amber-600 text-white rounded-lg hover:bg-amber-700 disabled:opacity-50 transition-colors"
+              >
+                <RotateCcw className="w-4 h-4" />
+                승인 상태로 되돌리기
+              </button>
+            </div>
+          )}
+
+          {/* 완료 → 확정으로 되돌리기 */}
+          {quote.status === "completed" && (user?.role === "sales" || user?.role === "dev") && (
+            <div className="flex flex-wrap gap-2 sm:gap-3">
+              <button
+                onClick={() => updateStatus("confirmed")}
+                disabled={saving}
+                className="flex items-center gap-1.5 px-3 sm:px-5 py-2 sm:py-2.5 text-sm bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 disabled:opacity-50 transition-colors"
+              >
+                <RotateCcw className="w-4 h-4" />
+                확정 상태로 되돌리기
+              </button>
+            </div>
+          )}
+
+          {/* 미진행 → 승인으로 되돌리기 */}
+          {quote.status === "lost" && (user?.role === "sales" || user?.role === "dev") && (
             <div className="flex flex-wrap gap-2 sm:gap-3">
               <button
                 onClick={() => updateStatus("approved")}
