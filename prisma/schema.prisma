@@ -120,6 +120,7 @@ model QuoteItem {
   quantity    Int     @default(1)
   amount      Int
   note        String?
+  isRequired  Boolean @default(true)  // 필수=true, 선택=false (협상 시 cut 가능 여부)
 
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
@@ -139,4 +140,65 @@ model QuoteComment {
 
   @@index([quoteId])
   @@index([createdAt])
+}
+
+// 참고 견적 (과거 우리가 보낸 견적, 매출 관리/단가 baseline 참고용)
+model ReferenceQuote {
+  id            String   @id @default(cuid())
+  source        String   // 협력사: "원카드시스템"
+  projectName   String   // "MAP내방객솔루션", "신반포22차 아파트 커뮤니티"
+  quoteDate     String   // YYYY-MM-DD (필수)
+  revision      Int      @default(1)         // 1차/2차/3차
+  isFinal       Boolean  @default(false)
+  category      String?  // "내방객", "출입통제", "스마트빌딩", "커뮤니티"
+  type          String   @default("sale")    // sale | rental | re_event
+
+  // 금액
+  subtotal      Int      @default(0)
+  vat           Int      @default(0)
+  totalAmount   Int      @default(0)
+
+  // 예외 분류 (baseline 평균에서 제외)
+  isException     Boolean @default(false)
+  exceptionReason String? // "초안/이전 버전", "사이드+자동화 할인", "특수 케이스"
+
+  // 원본 파일 + 부속 자료
+  sourceFile    String?  // 원본 xlsx 로컬 경로
+  attachments   Json?    // [{type, fileName, localPath, bytes}]
+
+  // 추출 원본 (디버깅/재처리용)
+  parsedRaw     Json?
+
+  notes         String?
+
+  items         ReferenceQuoteItem[]
+
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([source])
+  @@index([quoteDate])
+  @@index([category])
+  @@index([projectName])
+  @@index([isException])
+}
+
+model ReferenceQuoteItem {
+  id          String  @id @default(cuid())
+  refQuoteId  String
+  refQuote    ReferenceQuote @relation(fields: [refQuoteId], references: [id], onDelete: Cascade)
+  sortOrder   Int     @default(0)
+  itemName    String
+  description String?
+  unitPrice   Int     @default(0)
+  quantity    Int     @default(1)
+  amount      Int     @default(0)
+  note        String?
+  normalizedName String? // 항목명 정규화 (baseline 분석용 그룹핑)
+
+  createdAt   DateTime @default(now())
+
+  @@index([refQuoteId])
+  @@index([itemName])
+  @@index([normalizedName])
 }
