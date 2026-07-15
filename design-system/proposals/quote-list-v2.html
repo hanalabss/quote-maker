@@ -1,0 +1,117 @@
+<!-- @dsCard name="시안 — 견적 목록 v2" group="Proposals" subtitle="파이프라인 바 필터 · 오늘 할 일 스트립 · 모바일 카드뷰" viewport="1120x980" -->
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Noto Sans KR','Apple SD Gothic Neo','Malgun Gothic',sans-serif;background:#f9fafb;color:#111827;-webkit-font-smoothing:antialiased}
+main{max-width:1152px;margin:0 auto;padding:28px 20px}
+.num{font-variant-numeric:tabular-nums}
+h1{font-size:22px;font-weight:700}
+.top{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px}
+/* ── 오늘 할 일 스트립 ── */
+.todo{display:flex;gap:8px;margin-bottom:20px;flex-wrap:wrap}
+.todo a{display:inline-flex;align-items:center;gap:6px;font-size:13px;font-weight:500;padding:7px 14px;border-radius:9999px;text-decoration:none;border:1px solid transparent}
+.todo .urgent{background:#fef2f2;color:#b91c1c;border-color:#fecaca}
+.todo .review{background:#fef9c3;color:#a16207;border-color:#fde68a}
+.todo .dot{width:6px;height:6px;border-radius:50%;background:currentColor;flex-shrink:0}
+/* ── 파이프라인 바 (시그니처) ── */
+.pipe{display:flex;gap:6px;align-items:stretch;margin-bottom:8px}
+.seg{flex:1;background:#fff;border:1px solid #e5e7eb;border-radius:10px;padding:10px 14px;cursor:pointer;position:relative;transition:box-shadow .15s;min-width:0}
+.seg:hover{box-shadow:0 2px 8px rgba(0,0,0,.06)}
+.seg::before{content:"";position:absolute;top:0;left:12px;right:12px;height:3px;border-radius:0 0 3px 3px;background:var(--c)}
+.seg small{display:block;font-size:12px;color:#6b7280;margin-bottom:2px}
+.seg b{font-size:20px;font-weight:700}
+.seg.on{border-color:#2563eb;box-shadow:0 0 0 2px rgba(37,99,235,.25)}
+.seg .arrow{position:absolute;right:-9px;top:50%;transform:translateY(-50%);color:#d1d5db;font-size:11px;z-index:1}
+.exits{display:flex;gap:6px;margin-bottom:20px}
+.exit{display:inline-flex;align-items:center;gap:6px;font-size:12px;color:#6b7280;background:#fff;border:1px dashed #d1d5db;border-radius:9999px;padding:5px 12px;cursor:pointer}
+.exit b{font-weight:600;color:#374151}
+/* ── 검색/정렬 ── */
+.bar{display:flex;gap:10px;margin-bottom:14px}
+.search{position:relative;flex:1}
+.search input{width:100%;font-family:inherit;font-size:14px;padding:10px 14px 10px 38px;border:1px solid #e5e7eb;border-radius:8px;outline:none;background:#fff}
+.search svg{position:absolute;left:12px;top:50%;transform:translateY(-50%);width:15px;height:15px}
+select{font-family:inherit;font-size:13px;padding:0 12px;border:1px solid #e5e7eb;border-radius:8px;background:#fff;color:#4b5563}
+/* ── 테이블 ── */
+.wrap{background:#fff;border:1px solid #e5e7eb;border-radius:12px;overflow:hidden;margin-bottom:28px}
+table{width:100%;border-collapse:collapse}
+thead{background:#f9fafb;border-bottom:1px solid #e5e7eb}
+th{padding:11px 16px;font-size:12px;font-weight:500;color:#6b7280;text-align:left}
+th.c,td.c{text-align:center}th.r,td.r{text-align:right}
+td{padding:13px 16px;font-size:14px;border-top:1px solid #f3f4f6}
+tbody tr{cursor:pointer}tbody tr:hover{background:#f9fafb}
+.mono{font-family:ui-monospace,monospace;font-size:12.5px;color:#6b7280}
+.badge{display:inline-block;padding:2px 10px;border-radius:9999px;font-size:12px;font-weight:500}
+.name{font-weight:500}
+.name small{display:block;font-size:12px;color:#9ca3af;font-weight:400;margin-top:1px}
+.dd{font-size:12px;font-weight:700;margin-left:6px}
+.mini{display:inline-flex;gap:3px;vertical-align:middle;margin-left:8px}
+.mini i{width:5px;height:5px;border-radius:50%;background:#e5e7eb}
+.mini i.f{background:#2563eb}
+/* ── 모바일 카드뷰 ── */
+.label{font-size:12px;font-weight:600;color:#9ca3af;text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px}
+.phone{width:375px;background:#f9fafb;border:1px solid #e5e7eb;border-radius:20px;padding:14px;display:flex;flex-direction:column;gap:10px}
+.qcard{background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:14px 16px}
+.qcard .r1{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px}
+.qcard .r2{display:flex;justify-content:space-between;align-items:baseline}
+.qcard h3{font-size:15px;font-weight:600;margin-bottom:2px}
+.qcard .amt{font-size:15px;font-weight:700}
+.qcard .meta{font-size:12px;color:#9ca3af}
+</style>
+<main>
+  <div class="top">
+    <h1>견적 관리</h1>
+    <a href="#" style="font-size:14px;background:#2563eb;color:#fff;padding:8px 16px;border-radius:8px;text-decoration:none">+ 새 견적 요청</a>
+  </div>
+
+  <div class="todo">
+    <a class="urgent" href="#"><span class="dot"></span>개발 마감 임박 1건 — SKT T1 NFC <b class="num">D-2</b></a>
+    <a class="review" href="#"><span class="dot"></span>검토 대기 3건 · 가장 오래된 요청 <b class="num">2일 전</b></a>
+  </div>
+
+  <!-- 파이프라인 바: 스탯 카드 7개 → 클릭 필터 겸용 워크플로우 바 -->
+  <div class="pipe">
+    <div class="seg" style="--c:#eab308"><span class="arrow">▸</span><small>대기중</small><b class="num">3</b></div>
+    <div class="seg on" style="--c:#3b82f6"><span class="arrow">▸</span><small>검토중</small><b class="num">1</b></div>
+    <div class="seg" style="--c:#22c55e"><span class="arrow">▸</span><small>승인</small><b class="num">12</b></div>
+    <div class="seg" style="--c:#10b981"><span class="arrow">▸</span><small>확정</small><b class="num">4</b></div>
+    <div class="seg" style="--c:#64748b"><small>완료</small><b class="num">21</b></div>
+  </div>
+  <div class="exits">
+    <span class="exit">반려 <b class="num">2</b></span>
+    <span class="exit">미진행 <b class="num">5</b></span>
+    <span class="exit" style="border-style:solid;background:#eff6ff;border-color:#bfdbfe;color:#1d4ed8">전체 보기 <b class="num" style="color:#1d4ed8">48</b></span>
+  </div>
+
+  <div class="bar">
+    <div class="search"><svg viewBox="0 0 24 24" fill="none" stroke="#9ca3af" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m21 21-4-4"/></svg><input placeholder="행사명, 요청자, 견적번호 검색"></div>
+    <select><option>최신 요청순</option><option>마감 임박순</option><option>금액 높은순</option></select>
+  </div>
+
+  <div class="wrap"><table>
+    <thead><tr><th>행사</th><th class="c">유형</th><th>요청자</th><th class="r">금액</th><th class="c">상태</th><th class="c">날짜</th></tr></thead>
+    <tbody>
+      <tr><td><div class="name">SKT T1 전화부스 NFC 음원재생<small class="mono">QT-20260701-001</small></div></td><td class="c"><span class="badge" style="background:#dbeafe;color:#1d4ed8">렌탈</span></td><td style="color:#4b5563">이매니저</td><td class="r num" style="font-weight:600">660,000원</td><td class="c"><span class="badge" style="background:#d1fae5;color:#047857">확정</span><span class="dd num" style="color:#dc2626">D-2</span><span class="mini"><i class="f"></i><i class="f"></i><i class="f"></i><i class="f"></i><i></i></span></td><td class="c" style="color:#6b7280;font-size:13px">행사 종료 7/20</td></tr>
+      <tr><td><div class="name">강원 팝업스토어 포토카드<small class="mono">QT-20260708-001</small></div></td><td class="c"><span class="badge" style="background:#dbeafe;color:#1d4ed8">렌탈</span></td><td style="color:#4b5563">김사업</td><td class="r num" style="font-weight:600">770,000원</td><td class="c"><span class="badge" style="background:#dcfce7;color:#15803d">승인</span><span class="mini"><i class="f"></i><i class="f"></i><i class="f"></i><i></i><i></i></span></td><td class="c" style="color:#6b7280;font-size:13px">요청 7/8</td></tr>
+      <tr><td><div class="name">코엑스 전시 부스 키오스크<small class="mono">QT-20260612-002</small></div></td><td class="c"><span class="badge" style="background:#ffedd5;color:#c2410c">판매</span></td><td style="color:#4b5563">최과장</td><td class="r num" style="font-weight:600">3,250,000원</td><td class="c"><span class="badge" style="background:#fef9c3;color:#a16207">대기중</span><span class="mini"><i class="f"></i><i></i><i></i><i></i><i></i></span></td><td class="c" style="color:#6b7280;font-size:13px">요청 6/12</td></tr>
+      <tr><td><div class="name">새벌프렌즈 키오스크<small class="mono">QT-20260619-001</small></div></td><td class="c"><span class="badge" style="background:#ccfbf1;color:#0f766e">재행사</span></td><td style="color:#4b5563">박대리</td><td class="r num" style="font-weight:600">1,001,000원</td><td class="c"><span class="badge" style="background:#f1f5f9;color:#334155">완료</span><span class="mini"><i class="f"></i><i class="f"></i><i class="f"></i><i class="f"></i><i class="f"></i></span></td><td class="c" style="color:#6b7280;font-size:13px">행사 종료 6/24</td></tr>
+    </tbody>
+  </table></div>
+
+  <p class="label">모바일 (375px) — 테이블 대신 카드 리스트</p>
+  <div class="phone">
+    <div class="qcard">
+      <div class="r1"><span class="mono num">QT-20260701-001</span><span><span class="badge" style="background:#d1fae5;color:#047857">확정</span><span class="dd num" style="color:#dc2626">D-2</span></span></div>
+      <h3>SKT T1 전화부스 NFC 음원재생</h3>
+      <div class="r2"><span class="meta">이매니저 · 렌탈 · 행사 종료 7/20</span><span class="amt num">660,000원</span></div>
+    </div>
+    <div class="qcard">
+      <div class="r1"><span class="mono num">QT-20260708-001</span><span class="badge" style="background:#dcfce7;color:#15803d">승인</span></div>
+      <h3>강원 팝업스토어 포토카드</h3>
+      <div class="r2"><span class="meta">김사업 · 렌탈 · 요청 7/8</span><span class="amt num">770,000원</span></div>
+    </div>
+    <div class="qcard">
+      <div class="r1"><span class="mono num">QT-20260612-002</span><span class="badge" style="background:#fef9c3;color:#a16207">대기중</span></div>
+      <h3>코엑스 전시 부스 키오스크</h3>
+      <div class="r2"><span class="meta">최과장 · 판매 · 요청 6/12</span><span class="amt num">3,250,000원</span></div>
+    </div>
+  </div>
+</main>
