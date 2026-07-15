@@ -29,6 +29,7 @@ import {
 import { formatKRW } from "@/lib/pricing";
 import type { QuoteStatus, QuoteType } from "@/types";
 import { STATUS_LABELS, STATUS_COLORS, TYPE_LABELS, TYPE_COLORS } from "@/types";
+import { normalizeItemName, type BaselineMap } from "@/lib/baseline";
 
 interface QuoteItem {
   id: string;
@@ -65,6 +66,7 @@ interface QuoteDetail {
   notes: string | null;
   reviewNote: string | null;
   rejectionReason: string | null;
+  revisionReason: string | null;
   confirmedAt: string | null;
   confirmedDate: string | null;
   confirmedEndDate: string | null;
@@ -219,6 +221,20 @@ export default function QuoteDetailPage({
   const [comments, setComments] = useState<QuoteCommentType[]>([]);
   const [newComment, setNewComment] = useState("");
   const [commentSaving, setCommentSaving] = useState(false);
+  // 수정 요청 (사업팀, approved → reviewing)
+  const [showRevisionModal, setShowRevisionModal] = useState(false);
+  const [revisionReasonInput, setRevisionReasonInput] = useState("");
+  // 승인 가드레일 (soft gate)
+  const [guardrailWarnings, setGuardrailWarnings] = useState<string[]>([]);
+  const [overrideReason, setOverrideReason] = useState("");
+  // 기본정보 수정
+  const [showBasicEditModal, setShowBasicEditModal] = useState(false);
+  const [basicForm, setBasicForm] = useState({
+    eventDate: "", eventEndDate: "", venue: "", deadline: "",
+    expectedVisitors: "", requesterContact: "", requesterEmail: "", notes: "",
+  });
+  // baseline 시세 (편집 모드 배지)
+  const [baselineStats, setBaselineStats] = useState<BaselineMap | null>(null);
   const { user, isDev, isDevTeam } = useAuth();
   const showPrice = user?.role === "dev" || user?.role === "sales";
   const router = useRouter();
@@ -234,6 +250,17 @@ export default function QuoteDetailPage({
         setLoading(false);
       });
   }, [id]);
+
+  // 편집 모드 진입 시 참고 견적 시세(baseline) 로드 — dev 전용
+  useEffect(() => {
+    if (!editing || !isDev || baselineStats) return;
+    fetch("/api/references/baseline")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (data?.stats) setBaselineStats(data.stats);
+      })
+      .catch(() => {});
+  }, [editing, isDev, baselineStats]);
 
 
 
@@ -282,6 +309,14 @@ export default function QuoteDetailPage({
     const data = await res.json();
     if (res.ok) {
       setQuote(data);
+      setGuardrailWarnings([]);
+      setOverrideReason("");
+      setShowRevisionModal(false);
+      setRevisionReasonInput("");
+    } else if (res.status === 422 && Array.isArray(data.warnings)) {
+      // 승인 가드레일: 경고 확인 모달 표시
+      setGuardrailWarnings(data.warnings);
+      setOverrideReason("");
     } else {
       alert(data.error || "상태 변경에 실패했습니다");
     }
@@ -289,6 +324,38 @@ export default function QuoteDetailPage({
     setShowRejectModal(false);
     setShowConfirmModal(false);
     setShowLostModal(false);
+  }
+
+  function openBasicEditModal() {
+    if (!quote) return;
+    setBasicForm({
+      eventDate: quote.eventDate || "",
+      eventEndDate: quote.eventEndDate || "",
+      venue: quote.venue || "",
+      deadline: quote.deadline || "",
+      expectedVisitors: quote.expectedVisitors || "",
+      requesterContact: quote.requesterContact || "",
+      requesterEmail: quote.requesterEmail || "",
+      notes: quote.notes || "",
+    });
+    setShowBasicEditModal(true);
+  }
+
+  async function saveBasicInfo() {
+    setSaving(true);
+    const res = await fetch(`/api/quotes/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ basicInfo: basicForm }),
+    });
+    const data = await res.json();
+    if (res.ok) {
+      setQuote(data);
+      setShowBasicEditModal(false);
+    } else {
+      alert(data.error || "기본정보 수정에 실패했습니다");
+    }
+    setSaving(false);
   }
 
   async function saveItems() {
@@ -489,7 +556,19 @@ export default function QuoteDetailPage({
         {/* 사이드: 행사/요청 정보 (모바일에서는 견적 항목 아래) */}
         <div className="lg:col-span-1 order-2 space-y-4">
           <div className="bg-white rounded-xl border p-5">
-            <h3 className="font-medium mb-3">행사 정보</h3>
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="font-medium">행사 정보</h3>
+              {["pending", "reviewing", "approved"].includes(quote.status) &&
+                (isDev || quote.createdById === user?.id) && (
+                  <button
+                    onClick={openBasicEditModal}
+                    className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800"
+                  >
+                    <Edit3 className="w-3.5 h-3.5" />
+                    수정
+                  </button>
+                )}
+            </div>
             <dl className="space-y-2 text-sm">
               {quote.eventDate && (
                 <div className="flex justify-between">
@@ -708,6 +787,21 @@ export default function QuoteDetailPage({
                           placeholder="내용 (엑셀 견적서에 표시됩니다)"
                           className="w-full px-3 py-1.5 text-sm border rounded-lg text-gray-600"
                         />
+                        {/* 참고 견적 시세 배지 */}
+                        {(() => {
+                          const stat = baselineStats?.[normalizeItemName(item.itemName)];
+                          if (!stat) return null;
+                          // 참고 견적은 SI 판매 건 — 렌탈/재행사에서는 정보성으로만 표시
+                          const belowFloor =
+                            quote.type === "sale" && stat.n >= 3 && item.unitPrice > 0 && item.unitPrice < stat.p25;
+                          return (
+                            <p className={`text-xs ${belowFloor ? "text-red-600 font-medium" : "text-gray-400"}`}>
+                              판매 시세 중간값 {formatKRW(stat.median)}원 · 하한(p25) {formatKRW(stat.p25)}원
+                              {stat.n < 3 ? ` · 표본 부족(n=${stat.n}) 참고만` : ` (n=${stat.n})`}
+                              {belowFloor && " — 하한 미만!"}
+                            </p>
+                          );
+                        })()}
                       </div>
                       <button
                         onClick={() => removeItem(i)}
@@ -823,6 +917,17 @@ export default function QuoteDetailPage({
                 placeholder="검토 메모를 입력하세요 (선택)"
                 className="w-full px-4 py-2.5 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none resize-none"
               />
+            </div>
+          )}
+
+          {/* 사업팀 수정 요청 사유 표시 (재검토 중) */}
+          {quote.status === "reviewing" && quote.revisionReason && (
+            <div className="bg-amber-50 rounded-xl border border-amber-200 p-5">
+              <h3 className="font-medium text-amber-800 mb-2 flex items-center gap-2">
+                <RotateCcw className="w-4 h-4" />
+                사업팀 수정 요청
+              </h3>
+              <p className="text-sm text-amber-700 whitespace-pre-wrap">{quote.revisionReason}</p>
             </div>
           )}
 
@@ -1053,6 +1158,16 @@ export default function QuoteDetailPage({
                     <span className="hidden sm:inline">승인 철회</span>
                   </button>
                 )}
+                {user?.role === "sales" && (
+                  <button
+                    onClick={() => { setRevisionReasonInput(""); setShowRevisionModal(true); }}
+                    disabled={saving}
+                    className="flex items-center gap-1.5 px-3 py-2.5 text-sm text-amber-700 border border-amber-200 bg-white rounded-lg hover:bg-amber-50 disabled:opacity-50 transition-colors"
+                  >
+                    <RotateCcw className="w-4 h-4" />
+                    수정 요청
+                  </button>
+                )}
                 <button
                   onClick={() => setShowLostModal(true)}
                   disabled={saving}
@@ -1260,6 +1375,168 @@ export default function QuoteDetailPage({
                 className="px-4 py-2 text-sm bg-gray-600 text-white rounded-lg hover:bg-gray-700 disabled:opacity-50"
               >
                 미진행 확정
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 수정 요청 모달 (사업팀, approved → reviewing) */}
+      {showRevisionModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={() => setShowRevisionModal(false)} onKeyDown={(e) => { if (e.key === "Escape") setShowRevisionModal(false); }}>
+          <div className="bg-white rounded-2xl p-6 max-w-md w-full" role="dialog" aria-modal="true" aria-labelledby="revision-title" onClick={(e) => e.stopPropagation()}>
+            <h3 id="revision-title" className="text-lg font-semibold mb-2">견적 수정 요청</h3>
+            <p className="text-sm text-gray-500 mb-4">
+              견적이 <strong>검토중</strong> 상태로 돌아가고 개발팀에 알림이 발송됩니다.
+            </p>
+            <textarea
+              value={revisionReasonInput}
+              onChange={(e) => setRevisionReasonInput(e.target.value)}
+              rows={4}
+              placeholder="어떤 부분을 수정해야 하는지 구체적으로 적어주세요 (예: 고객사 요청으로 QR 업로드 제외, 금액 조정 필요)"
+              className="w-full px-4 py-2.5 border rounded-lg text-sm focus:ring-2 focus:ring-amber-500 outline-none resize-none mb-4"
+            />
+            <div className="flex gap-2 justify-end">
+              <button
+                onClick={() => setShowRevisionModal(false)}
+                className="px-4 py-2 text-sm border rounded-lg hover:bg-gray-50"
+              >
+                취소
+              </button>
+              <button
+                onClick={() => updateStatus("reviewing", { revisionReason: revisionReasonInput })}
+                disabled={!revisionReasonInput.trim() || saving}
+                className="px-4 py-2 text-sm bg-amber-600 text-white rounded-lg hover:bg-amber-700 disabled:opacity-50"
+              >
+                {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : "수정 요청"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 승인 가드레일 모달 (soft gate) */}
+      {guardrailWarnings.length > 0 && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={() => setGuardrailWarnings([])} onKeyDown={(e) => { if (e.key === "Escape") setGuardrailWarnings([]); }}>
+          <div className="bg-white rounded-2xl p-6 max-w-lg w-full" role="dialog" aria-modal="true" aria-labelledby="guardrail-title" onClick={(e) => e.stopPropagation()}>
+            <h3 id="guardrail-title" className="text-lg font-semibold mb-2 flex items-center gap-2 text-amber-700">
+              <Clock className="w-5 h-5" />
+              승인 전 확인이 필요합니다
+            </h3>
+            <ul className="space-y-2 mb-4 max-h-60 overflow-y-auto">
+              {guardrailWarnings.map((w, i) => (
+                <li key={i} className="text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+                  {w}
+                </li>
+              ))}
+            </ul>
+            <p className="text-sm text-gray-500 mb-2">
+              항목을 수정하려면 취소 후 <strong>견적 항목 &gt; 수정</strong>에서 조정하세요.
+              그대로 승인하려면 사유를 입력해주세요 (검토 메모에 기록됩니다).
+            </p>
+            <textarea
+              value={overrideReason}
+              onChange={(e) => setOverrideReason(e.target.value)}
+              rows={2}
+              placeholder="무시 사유 (예: 고객사 협의 완료된 특별 단가)"
+              className="w-full px-4 py-2.5 border rounded-lg text-sm focus:ring-2 focus:ring-amber-500 outline-none resize-none mb-4"
+            />
+            <div className="flex gap-2 justify-end">
+              <button
+                onClick={() => setGuardrailWarnings([])}
+                className="px-4 py-2 text-sm border rounded-lg hover:bg-gray-50"
+              >
+                취소 (항목 수정)
+              </button>
+              <button
+                onClick={() => updateStatus("approved", { overrideReason })}
+                disabled={!overrideReason.trim() || saving}
+                className="px-4 py-2 text-sm bg-amber-600 text-white rounded-lg hover:bg-amber-700 disabled:opacity-50"
+              >
+                {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : "무시하고 승인"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 기본정보 수정 모달 */}
+      {showBasicEditModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={() => setShowBasicEditModal(false)} onKeyDown={(e) => { if (e.key === "Escape") setShowBasicEditModal(false); }}>
+          <div className="bg-white rounded-2xl p-6 max-w-lg w-full max-h-[90vh] overflow-y-auto" role="dialog" aria-modal="true" aria-labelledby="basic-edit-title" onClick={(e) => e.stopPropagation()}>
+            <h3 id="basic-edit-title" className="text-lg font-semibold mb-1">기본정보 수정</h3>
+            <p className="text-xs text-gray-400 mb-4">
+              가격에 영향 없는 정보만 수정할 수 있습니다. 기능/항목 변경은 수정 요청을 이용하세요.
+            </p>
+            <div className="space-y-3">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label htmlFor="be-eventDate" className="block text-xs font-medium text-gray-600 mb-1">행사 시작일</label>
+                  <input id="be-eventDate" type="date" value={basicForm.eventDate}
+                    onChange={(e) => setBasicForm((p) => ({ ...p, eventDate: e.target.value }))}
+                    className="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none" />
+                </div>
+                <div>
+                  <label htmlFor="be-eventEndDate" className="block text-xs font-medium text-gray-600 mb-1">행사 종료일</label>
+                  <input id="be-eventEndDate" type="date" value={basicForm.eventEndDate}
+                    onChange={(e) => setBasicForm((p) => ({ ...p, eventEndDate: e.target.value }))}
+                    className="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none" />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label htmlFor="be-venue" className="block text-xs font-medium text-gray-600 mb-1">행사 장소</label>
+                  <input id="be-venue" type="text" value={basicForm.venue}
+                    onChange={(e) => setBasicForm((p) => ({ ...p, venue: e.target.value }))}
+                    className="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none" />
+                </div>
+                <div>
+                  <label htmlFor="be-deadline" className="block text-xs font-medium text-gray-600 mb-1">납기일</label>
+                  <input id="be-deadline" type="date" value={basicForm.deadline}
+                    onChange={(e) => setBasicForm((p) => ({ ...p, deadline: e.target.value }))}
+                    className="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none" />
+                </div>
+              </div>
+              <div>
+                <label htmlFor="be-visitors" className="block text-xs font-medium text-gray-600 mb-1">예상 방문객</label>
+                <input id="be-visitors" type="text" value={basicForm.expectedVisitors}
+                  onChange={(e) => setBasicForm((p) => ({ ...p, expectedVisitors: e.target.value }))}
+                  className="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none" />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label htmlFor="be-contact" className="block text-xs font-medium text-gray-600 mb-1">연락처</label>
+                  <input id="be-contact" type="tel" value={basicForm.requesterContact}
+                    onChange={(e) => setBasicForm((p) => ({ ...p, requesterContact: e.target.value }))}
+                    className="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none" />
+                </div>
+                <div>
+                  <label htmlFor="be-email" className="block text-xs font-medium text-gray-600 mb-1">이메일</label>
+                  <input id="be-email" type="email" value={basicForm.requesterEmail}
+                    onChange={(e) => setBasicForm((p) => ({ ...p, requesterEmail: e.target.value }))}
+                    className="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none" />
+                </div>
+              </div>
+              <div>
+                <label htmlFor="be-notes" className="block text-xs font-medium text-gray-600 mb-1">기타 요청사항</label>
+                <textarea id="be-notes" rows={3} value={basicForm.notes}
+                  onChange={(e) => setBasicForm((p) => ({ ...p, notes: e.target.value }))}
+                  className="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none resize-none" />
+              </div>
+            </div>
+            <div className="flex gap-2 justify-end mt-5">
+              <button
+                onClick={() => setShowBasicEditModal(false)}
+                className="px-4 py-2 text-sm border rounded-lg hover:bg-gray-50"
+              >
+                취소
+              </button>
+              <button
+                onClick={saveBasicInfo}
+                disabled={saving}
+                className="px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
+              >
+                {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : "저장"}
               </button>
             </div>
           </div>

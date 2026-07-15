@@ -1,7 +1,71 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { getAuthUser, requireDev, requireAuth } from "@/lib/auth";
-import { sendApprovalNotification, sendConfirmationNotification } from "@/lib/email";
+import {
+  sendApprovalNotification,
+  sendConfirmationNotification,
+  sendRevisionRequestNotification,
+} from "@/lib/email";
+import { applyPriceRate, formatKRW } from "@/lib/pricing";
+import { TYPE_PRICE_RATE } from "@/types";
+import type { QuoteType } from "@/types";
+import { buildBaselineMap, normalizeItemName } from "@/lib/baseline";
+
+// 승인 가드레일: 단가·납기 자동 검증. 경고 목록 반환 (soft gate — overrideReason으로 강행 가능)
+async function collectApprovalWarnings(quote: {
+  id: string;
+  type: string;
+  deadline: string | null;
+}): Promise<string[]> {
+  const warnings: string[] = [];
+
+  const [items, modules, refItems] = await Promise.all([
+    prisma.quoteItem.findMany({ where: { quoteId: quote.id } }),
+    prisma.module.findMany({ select: { id: true, basePrice: true } }),
+    prisma.referenceQuoteItem.findMany({
+      where: { refQuote: { isException: false }, unitPrice: { gt: 0 } },
+      select: { itemName: true, unitPrice: true },
+    }),
+  ]);
+
+  const baseline = buildBaselineMap(refItems);
+  const rate = TYPE_PRICE_RATE[quote.type as QuoteType] ?? 1;
+  const moduleById = new Map(modules.map((m) => [m.id, m]));
+
+  for (const item of items) {
+    // 1) 모듈 기준가 대비 ±20% 검증 (유형 배율 적용)
+    const mod = item.moduleId ? moduleById.get(item.moduleId) : undefined;
+    if (mod && mod.basePrice > 0) {
+      const expected = applyPriceRate(mod.basePrice, rate);
+      if (expected > 0 && Math.abs(item.unitPrice - expected) / expected > 0.2) {
+        warnings.push(
+          `"${item.itemName}" 단가 ${formatKRW(item.unitPrice)}원 — 모듈 기준가 ${formatKRW(expected)}원(유형 배율 적용) 대비 ±20% 초과`
+        );
+      }
+    }
+    // 2) 참고 견적 시세 하한(p25) 검증 — 표본 3개 이상 & 판매 유형만
+    //    (참고 견적은 SI 판매 건이라 렌탈/재행사 단가와 스케일이 달라 오탐 발생)
+    if (quote.type === "sale") {
+      const stat = baseline[normalizeItemName(item.itemName)];
+      if (stat && stat.n >= 3 && item.unitPrice < stat.p25) {
+        warnings.push(
+          `"${item.itemName}" 단가 ${formatKRW(item.unitPrice)}원 — 참고 견적 시세 하한 p25 ${formatKRW(stat.p25)}원(n=${stat.n}) 미만`
+        );
+      }
+    }
+  }
+
+  // 3) 납기일 경과 검증
+  if (quote.deadline) {
+    const today = new Date();
+    const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+    if (quote.deadline < todayStr) {
+      warnings.push(`요청 납기일(${quote.deadline})이 이미 지났습니다 — 일정 재확인 필요`);
+    }
+  }
+
+  return warnings;
+}
 
 export async function GET(
   request: NextRequest,
@@ -60,9 +124,9 @@ export async function PATCH(
 
   // 상태 변경
   if (body.status) {
-    // 사업팀 전용 전이: approved ↔ confirmed / lost / completed
+    // 사업팀 전용 전이: approved ↔ confirmed / lost / completed + 수정 요청(approved → reviewing)
     const salesTransitions: Record<string, string[]> = {
-      approved: ["confirmed", "lost"],
+      approved: ["confirmed", "lost", "reviewing"],
       confirmed: ["approved", "completed"],
       completed: ["confirmed"],
       lost: ["approved"],
@@ -97,18 +161,45 @@ export async function PATCH(
       );
     }
 
+    // 승인 가드레일 (soft gate): reviewing → approved 시 단가/납기 자동 검증
+    if (body.status === "approved" && quote.status === "reviewing" && !body.overrideReason) {
+      const warnings = await collectApprovalWarnings(quote);
+      if (warnings.length > 0) {
+        return NextResponse.json(
+          { error: "승인 전 확인이 필요한 항목이 있습니다", warnings },
+          { status: 422 }
+        );
+      }
+    }
+
     const updateData: Record<string, unknown> = {
       status: body.status,
     };
 
-    // dev 상태 변경
-    if (isDevTransition) {
+    // dev 상태 변경 (사업팀의 수정 요청 approved→reviewing은 검토자 변경 없음)
+    if (isDevTransition && user.role === "dev") {
       updateData.reviewedById = user.id;
       if (body.status === "rejected" && body.rejectionReason) {
         updateData.rejectionReason = body.rejectionReason;
       }
       if (body.reviewNote) {
         updateData.reviewNote = body.reviewNote;
+      }
+    }
+
+    // 사업팀 수정 요청: approved → reviewing 사유 기록
+    const isRevisionRequest =
+      body.status === "reviewing" && quote.status === "approved" && !!body.revisionReason;
+    if (isRevisionRequest) {
+      updateData.revisionReason = String(body.revisionReason);
+    }
+
+    // 승인 시: 가드레일 무시 사유를 검토 메모에 기록 + 수정 요청 사유 해소
+    if (body.status === "approved") {
+      updateData.revisionReason = null;
+      if (body.overrideReason) {
+        const base = (body.reviewNote as string) || quote.reviewNote || "";
+        updateData.reviewNote = `${base ? base + "\n" : ""}[가드레일 무시] ${body.overrideReason}`;
       }
     }
 
@@ -163,6 +254,18 @@ export async function PATCH(
       }).catch((err) => console.error("[Email] 승인 알림 실패:", err));
     }
 
+    // 수정 요청 시 → 개발팀에게 이메일
+    if (isRevisionRequest) {
+      const quoteUrl = `${process.env.NEXT_PUBLIC_APP_URL}/dashboard/quotes/${id}`;
+      await sendRevisionRequestNotification({
+        quoteNumber: quote.quoteNumber,
+        eventName: quote.eventName,
+        requesterName: quote.requesterName,
+        reason: String(body.revisionReason),
+        quoteUrl,
+      }).catch((err) => console.error("[Email] 수정 요청 알림 실패:", err));
+    }
+
     // 확정 시 → 개발팀 + 요청자에게 이메일
     if (body.status === "confirmed") {
       const quoteUrl = `${process.env.NEXT_PUBLIC_APP_URL}/dashboard/quotes/${id}`;
@@ -178,6 +281,57 @@ export async function PATCH(
       }).catch((err) => console.error("[Email] 확정 알림 실패:", err));
     }
 
+    return NextResponse.json(updated);
+  }
+
+  // 기본정보 수정 (가격 무관 필드 — 사업팀 본인 견적 또는 dev)
+  if (body.basicInfo && typeof body.basicInfo === "object") {
+    const editableStates = ["pending", "reviewing", "approved"];
+    if (!editableStates.includes(quote.status)) {
+      return NextResponse.json(
+        { error: "확정/완료된 견적은 기본정보를 수정할 수 없습니다" },
+        { status: 400 }
+      );
+    }
+    if (user.role === "sales") {
+      if (quote.createdById !== user.id) {
+        return NextResponse.json({ error: "본인 견적만 수정할 수 있습니다" }, { status: 403 });
+      }
+    } else if (user.role !== "dev") {
+      return NextResponse.json({ error: "권한이 없습니다" }, { status: 403 });
+    }
+
+    // 가격에 영향 없는 필드만 화이트리스트 (모듈/화면구성 변경은 수정 요청 플로우 사용)
+    const allowedFields = [
+      "eventDate",
+      "eventEndDate",
+      "venue",
+      "deadline",
+      "expectedVisitors",
+      "requesterContact",
+      "requesterEmail",
+      "notes",
+    ] as const;
+    const basicData: Record<string, string | null> = {};
+    for (const key of allowedFields) {
+      if (key in body.basicInfo) {
+        const v = body.basicInfo[key];
+        basicData[key] = v === "" || v === null ? null : String(v);
+      }
+    }
+    if (Object.keys(basicData).length === 0) {
+      return NextResponse.json({ error: "수정할 내용이 없습니다" }, { status: 400 });
+    }
+
+    const updated = await prisma.quote.update({
+      where: { id },
+      data: basicData,
+      include: {
+        items: { orderBy: { sortOrder: "asc" } },
+        createdBy: { select: { name: true, team: true, email: true } },
+        reviewedBy: { select: { name: true } },
+      },
+    });
     return NextResponse.json(updated);
   }
 
