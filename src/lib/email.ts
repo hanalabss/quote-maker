@@ -152,6 +152,80 @@ export async function sendApprovalNotification(data: ApprovalNotificationData) {
   }
 }
 
+// 댓글 등록 시 → 상대 팀에게 (dev 작성 → 요청자 / 그 외 작성 → 개발팀)
+export async function sendCommentNotification(data: {
+  quoteNumber: string;
+  eventName: string;
+  quoteUrl: string;
+  authorName: string;
+  authorRole: string;
+  content: string;
+  requesterEmail?: string | null;
+  createdByEmail?: string | null;
+}) {
+  let recipients: string[];
+  if (data.authorRole === "dev" || data.authorRole === "dev_staff") {
+    recipients = [...new Set([data.requesterEmail, data.createdByEmail].filter((e): e is string => !!e))];
+  } else {
+    recipients = await getDevEmails(["dev"]);
+  }
+  if (recipients.length === 0) {
+    console.log("[Email] 댓글 알림 수신자 없음 - 건너뜀:", data.quoteNumber);
+    return null;
+  }
+
+  return sendEmail(
+    recipients.join(","),
+    `[댓글] ${data.eventName} - ${data.authorName}`,
+    emailLayout("견적에 새 댓글이 달렸습니다", `
+      ${infoTable([
+        { label: "견적번호", value: data.quoteNumber },
+        { label: "행사명", value: data.eventName },
+        { label: "작성자", value: `${data.authorName} (${data.authorRole === "dev" ? "개발팀" : "사업팀"})` },
+      ])}
+      <div style="margin: 16px 0; padding: 12px 16px; background: #f8fafc; border-left: 3px solid #3b82f6; border-radius: 4px;">
+        <div style="font-size: 14px; color: #374151; white-space: pre-wrap;">${data.content}</div>
+      </div>
+      ${actionButton(data.quoteUrl, "댓글 확인하기")}
+    `)
+  );
+}
+
+// 사업팀 수정 요청 시 → 개발팀에게 (approved → reviewing)
+export async function sendRevisionRequestNotification(data: {
+  quoteNumber: string;
+  eventName: string;
+  requesterName: string;
+  reason: string;
+  quoteUrl: string;
+}) {
+  const devEmails = await getDevEmails(["dev"]);
+  if (devEmails.length === 0) {
+    console.log("[Email] dev 유저 없음 - 수정 요청 알림 건너뜀:", data.quoteNumber);
+    return null;
+  }
+
+  return sendEmail(
+    devEmails.join(","),
+    `[수정요청] ${data.eventName} - ${data.requesterName}`,
+    emailLayout("승인된 견적에 수정 요청이 접수되었습니다", `
+      ${infoTable([
+        { label: "견적번호", value: data.quoteNumber },
+        { label: "행사명", value: data.eventName },
+        { label: "요청자", value: data.requesterName },
+      ])}
+      <div style="margin: 16px 0; padding: 12px 16px; background: #fffbeb; border-left: 3px solid #f59e0b; border-radius: 4px;">
+        <div style="font-size: 12px; color: #92400e; margin-bottom: 4px; font-weight: bold;">수정 요청 사유</div>
+        <div style="font-size: 14px; color: #374151; white-space: pre-wrap;">${data.reason}</div>
+      </div>
+      <p style="font-size: 14px; color: #374151; margin-top: 16px;">
+        견적이 <strong>검토중</strong> 상태로 돌아갔습니다. 항목 수정 후 다시 승인해주세요.
+      </p>
+      ${actionButton(data.quoteUrl, "견적 검토하기", "#d97706")}
+    `)
+  );
+}
+
 // 확정 시 → 개발팀 + 요청자에게
 export async function sendConfirmationNotification(data: ConfirmationNotificationData) {
   const htmlContent = emailLayout("행사가 확정되었습니다", `

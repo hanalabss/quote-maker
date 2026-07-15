@@ -63,6 +63,7 @@ const QUOTE_TYPES: { value: QuoteType; label: string; description: string; color
 
 const KSNET_PRICE = 300000;
 const SELECT_PRINT_PRICE = 150000;
+const DRAFT_KEY = "qm-request-draft";
 
 // 이 모듈 중 하나라도 선택되면 PRINT_SDK 자동 선택
 const PRINT_SDK_TRIGGERS = ["CAM_PHOTO", "QR_UPLOAD", "TEXT_INPUT", "SELECT_PRINT"];
@@ -117,6 +118,59 @@ export default function RequestPage() {
     useKsnetPayment: false,
     ksnetMerchantId: "",
   });
+
+  // 임시저장: 배너 표시용 저장 시각 + 복원/새로작성 결정 전에는 자동 저장 보류
+  const [draftSavedAt, setDraftSavedAt] = useState<string | null>(null);
+  const [draftResolved, setDraftResolved] = useState(false);
+  const draftRef = useRef<{ form: typeof form; step: number } | null>(null);
+
+  // 마운트 시 임시저장 확인
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(DRAFT_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed?.form?.eventName || parsed?.form?.selectedModules?.length) {
+          draftRef.current = { form: parsed.form, step: parsed.step ?? 0 };
+          setDraftSavedAt(parsed.savedAt || null);
+          return; // 복원/새로작성 결정 전까지 자동 저장 보류
+        }
+      }
+    } catch {}
+    setDraftResolved(true);
+  }, []);
+
+  // 자동 저장 (0.8초 debounce)
+  useEffect(() => {
+    if (!draftResolved || submitted) return;
+    const t = setTimeout(() => {
+      try {
+        localStorage.setItem(
+          DRAFT_KEY,
+          JSON.stringify({ form, step, savedAt: new Date().toISOString() })
+        );
+      } catch {}
+    }, 800);
+    return () => clearTimeout(t);
+  }, [form, step, draftResolved, submitted]);
+
+  function restoreDraft() {
+    if (draftRef.current) {
+      setForm((prev) => ({ ...prev, ...draftRef.current!.form }));
+      setStep(draftRef.current.step);
+    }
+    setDraftSavedAt(null);
+    setDraftResolved(true);
+  }
+
+  function discardDraft() {
+    try {
+      localStorage.removeItem(DRAFT_KEY);
+    } catch {}
+    draftRef.current = null;
+    setDraftSavedAt(null);
+    setDraftResolved(true);
+  }
 
   useEffect(() => {
     fetch("/api/modules")
@@ -234,6 +288,9 @@ export default function RequestPage() {
       const data = await res.json();
       setQuoteNumber(data.quoteNumber);
       setSubmitted(true);
+      try {
+        localStorage.removeItem(DRAFT_KEY);
+      } catch {}
     } catch {
       alert("네트워크 오류가 발생했습니다");
     } finally {
@@ -312,6 +369,31 @@ export default function RequestPage() {
 
       {/* Progress */}
       <div className="max-w-5xl mx-auto px-4 py-6">
+        {/* 임시저장 복원 배너 */}
+        {draftSavedAt && !draftResolved && (
+          <div className="flex flex-wrap items-center gap-3 bg-blue-50 border border-blue-200 rounded-xl px-4 py-3 mb-6">
+            <p className="text-sm text-blue-800 flex-1 min-w-[200px]">
+              작성 중이던 견적 요청이 있습니다
+              <span className="text-blue-500 ml-1.5 text-xs">
+                ({new Date(draftSavedAt).toLocaleString("ko-KR", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" })} 저장 · 첨부파일은 복원되지 않습니다)
+              </span>
+            </p>
+            <div className="flex gap-2">
+              <button
+                onClick={discardDraft}
+                className="px-3 py-1.5 text-xs border border-blue-200 text-blue-700 rounded-lg hover:bg-blue-100 transition-colors"
+              >
+                새로 작성
+              </button>
+              <button
+                onClick={restoreDraft}
+                className="px-3 py-1.5 text-xs bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
+              >
+                이어서 작성
+              </button>
+            </div>
+          </div>
+        )}
         <ol className="flex items-center mb-8" aria-label="견적 요청 단계">
           {STEPS.map((label, i) => (
             <li key={label} className="flex items-center gap-2 flex-1 last:flex-none">

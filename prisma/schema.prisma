@@ -81,6 +81,7 @@ model Quote {
   // 기타
   notes           String?
   rejectionReason String?
+  revisionReason  String?  // 사업팀 수정 요청 사유 (approved → reviewing 되돌릴 때)
   reviewNote      String?
   attachments     Json?    // [{fileName, originalName, size, mimeType}]
 
