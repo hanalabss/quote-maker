@@ -1,0 +1,58 @@
+<!-- @dsCard name="시안 — 로그인 v2" group="Proposals" subtitle="파이프라인 도트 브랜드 마크 · 비밀번호 표시 토글 · 큰 터치 타깃" viewport="480x680" -->
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Noto Sans KR','Apple SD Gothic Neo','Malgun Gothic',sans-serif;background:#f9fafb;color:#111827;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:16px;-webkit-font-smoothing:antialiased}
+.box{width:100%;max-width:400px}
+.brand{text-align:center;margin-bottom:28px}
+.mark{width:52px;height:52px;border-radius:14px;background:#2563eb;color:#fff;font-weight:700;font-size:20px;display:inline-flex;align-items:center;justify-content:center;box-shadow:0 4px 12px rgba(37,99,235,.25);margin-bottom:12px}
+h1{font-size:24px;font-weight:700;letter-spacing:-.01em}
+.sub{font-size:13px;color:#6b7280;margin-top:3px}
+.dots{display:inline-flex;gap:5px;margin-top:12px}
+.dots i{width:6px;height:6px;border-radius:50%;background:#dbeafe}
+.dots i.f{background:#2563eb}
+form{background:#fff;border:1px solid #e5e7eb;border-radius:16px;box-shadow:0 1px 2px rgba(0,0,0,.05);padding:28px 24px;display:flex;flex-direction:column;gap:18px}
+label{font-size:13.5px;font-weight:500;color:#374151;display:block;margin-bottom:6px}
+.field input{width:100%;font-family:inherit;font-size:15px;padding:12px 16px;border:1px solid #d1d5db;border-radius:10px;outline:none}
+.field input:focus{border-color:#3b82f6;box-shadow:0 0 0 3px rgba(59,130,246,.25)}
+.pw{position:relative}
+.pw input{padding-right:44px}
+.pw .toggle{position:absolute;right:6px;top:50%;transform:translateY(-50%);border:none;background:none;padding:8px;cursor:pointer;color:#9ca3af;display:flex}
+.pw .toggle:hover{color:#4b5563}
+.row{display:flex;align-items:center;justify-content:space-between}
+.check{display:flex;align-items:center;gap:8px;cursor:pointer}
+.check input{width:16px;height:16px;accent-color:#2563eb}
+.check span{font-size:13.5px;color:#4b5563}
+button.primary{font-family:inherit;width:100%;display:flex;align-items:center;justify-content:center;gap:8px;padding:13px 16px;background:#2563eb;color:#fff;border:none;border-radius:10px;font-size:15px;font-weight:600;cursor:pointer;transition:background .15s}
+button.primary:hover{background:#1d4ed8}
+.err{font-size:13px;color:#b91c1c;background:#fef2f2;border:1px solid #fecaca;padding:9px 12px;border-radius:8px;display:none}
+.foot{text-align:center;font-size:12px;color:#9ca3af;margin-top:24px}
+svg{width:18px;height:18px}
+</style>
+<div class="box">
+  <div class="brand">
+    <span class="mark">QM</span>
+    <h1>QuoteMaker</h1>
+    <p class="sub">하나플랫폼 견적서 자동화 시스템</p>
+    <span class="dots" aria-hidden="true"><i class="f"></i><i class="f"></i><i class="f"></i><i></i><i></i></span>
+  </div>
+  <form>
+    <div class="field"><label>아이디</label><input type="text" placeholder="아이디를 입력하세요" autofocus></div>
+    <div class="field"><label>비밀번호</label>
+      <div class="pw">
+        <input type="password" placeholder="비밀번호를 입력하세요" value="••••••••">
+        <button type="button" class="toggle" aria-label="비밀번호 표시">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>
+        </button>
+      </div>
+    </div>
+    <p class="err">아이디 또는 비밀번호가 올바르지 않습니다</p>
+    <div class="row">
+      <label class="check"><input type="checkbox" checked><span>아이디 저장</span></label>
+    </div>
+    <button class="primary">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4M10 17l5-5-5-5m5 5H3"/></svg>
+      로그인
+    </button>
+  </form>
+  <p class="foot">© 2026 (주)하나플랫폼 · 계정 문의는 개발팀으로</p>
+</div>

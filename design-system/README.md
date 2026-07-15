@@ -23,9 +23,11 @@ design-system/
 │   ├── quote-list.html     # 견적 목록 페이지 전체 조합 (현행)
 │   └── login.html          # 로그인 페이지 전체 조합 (현행)
 └── proposals/              # UX 개선 시안 — 시그니처: "파이프라인 스파인" (생애주기 스테퍼 공통 언어)
-    ├── quote-list-v2.html  # 파이프라인 바 필터 + 오늘 할 일 스트립 + 모바일 카드뷰
-    ├── quote-detail-v2.html# 상태 스테퍼 + 2컬럼 재배치 + 하단 고정 액션바
-    └── request-form-v2.html# 위저드 스테퍼 통일 + 실시간 견적 요약 패널
+    ├── quote-list-v2.html  # 파이프라인 바 필터 + 오늘 할 일 스트립 + 모바일 카드뷰 (구현됨)
+    ├── quote-detail-v2.html# 상태 스테퍼 + 2컬럼 재배치 + 하단 고정 액션바 (구현됨)
+    ├── request-form-v2.html# 위저드 스테퍼 통일 + 실시간 견적 요약 패널 (구현됨)
+    ├── login-v2.html       # 브랜드 마크 + 파이프라인 도트 + 비밀번호 표시 토글 (시안)
+    └── modules-v2.html     # 유형별 환산가 미리보기 + 인라인 단가 수정 + 사용 토글 (시안)
 ```
 
 각 HTML 첫 줄의 `<!-- @dsCard group="…" -->` 주석이 Claude Design 패널의 카드 인덱스가 된다.
