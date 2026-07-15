@@ -297,44 +297,52 @@ export default function RequestPage() {
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
       <header className="bg-white border-b">
-        <div className="max-w-3xl mx-auto px-4 py-4 flex items-center gap-4">
+        <div className="max-w-5xl mx-auto px-4 py-4 flex items-center gap-4">
           <Link href="/" className="text-gray-400 hover:text-gray-600" aria-label="홈으로 돌아가기">
             <ArrowLeft className="w-5 h-5" />
           </Link>
-          <h1 className="text-lg font-semibold">견적 요청</h1>
+          <div>
+            <h1 className="text-lg font-semibold leading-tight">견적 요청</h1>
+            <p className="text-xs text-gray-400 hidden sm:block">
+              폼을 제출하면 견적 초안이 자동 생성되고, 개발팀 검토 후 최종 확정됩니다.
+            </p>
+          </div>
         </div>
       </header>
 
       {/* Progress */}
-      <div className="max-w-3xl mx-auto px-4 py-6">
-        <div className="flex items-center gap-2 mb-8">
+      <div className="max-w-5xl mx-auto px-4 py-6">
+        <ol className="flex items-center mb-8" aria-label="견적 요청 단계">
           {STEPS.map((label, i) => (
-            <div key={label} className="flex items-center gap-2 flex-1">
+            <li key={label} className="flex items-center gap-2 flex-1 last:flex-none">
               <div
-                className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium shrink-0 ${
+                className={`w-7 h-7 rounded-full flex items-center justify-center text-sm shrink-0 ${
                   i < step
                     ? "bg-blue-600 text-white"
                     : i === step
-                    ? "bg-blue-100 text-blue-700 ring-2 ring-blue-600"
+                    ? "bg-white border-2 border-blue-600 text-blue-600 font-bold ring-4 ring-blue-100"
                     : "bg-gray-100 text-gray-400"
                 }`}
+                aria-hidden="true"
               >
                 {i < step ? <Check className="w-4 h-4" /> : i + 1}
               </div>
               <span
-                className={`text-sm hidden sm:block ${
-                  i === step ? "text-blue-700 font-medium" : "text-gray-400"
+                className={`text-sm hidden sm:block whitespace-nowrap ${
+                  i === step ? "text-gray-900 font-semibold" : i < step ? "text-gray-700 font-medium" : "text-gray-400"
                 }`}
               >
                 {label}
+                {i === step && <span className="sr-only"> (현재 단계)</span>}
               </span>
               {i < STEPS.length - 1 && (
-                <div className={`flex-1 h-px ${i < step ? "bg-blue-600" : "bg-gray-200"}`} />
+                <div className={`flex-1 h-0.5 mx-2 ${i < step ? "bg-blue-600" : "bg-gray-200"}`} aria-hidden="true" />
               )}
-            </div>
+            </li>
           ))}
-        </div>
+        </ol>
 
+        <div className="lg:grid lg:grid-cols-[minmax(0,1fr)_320px] lg:gap-5 lg:items-start">
         <div className="bg-white rounded-2xl shadow-sm border p-6 sm:p-8">
           {/* Step 0: 기본 정보 */}
           {step === 0 && (
@@ -498,7 +506,7 @@ export default function RequestPage() {
           {step === 1 && (
             <div>
               <div className="flex items-center justify-between mb-2">
-                <h2 className="text-xl font-semibold">단가표</h2>
+                <h2 className="text-xl font-semibold">필요한 기능을 선택하세요</h2>
                 <span className={`text-xs px-2.5 py-1 rounded-full font-medium ${
                   form.quoteType === "sale" ? "bg-orange-100 text-orange-700" :
                   form.quoteType === "re_event" ? "bg-teal-100 text-teal-700" :
@@ -510,9 +518,10 @@ export default function RequestPage() {
                 </span>
               </div>
               <p className="text-sm text-gray-500 mb-6">
-                필요한 기능을 선택해주세요. 테스트 및 유지보수는 자동 포함됩니다.
+                선택할 때마다 견적 요약이 바로 갱신됩니다. 테스트 및 유지보수는 자동 포함되며, 확실하지
+                않은 기능은 비워두고 기타 요청사항에 적어주세요.
               </p>
-              <div className="space-y-3">
+              <div className="grid sm:grid-cols-2 gap-3">
                 {modules
                   .filter((m) => !m.isAutoIncluded)
                   .map((mod) => {
@@ -522,36 +531,33 @@ export default function RequestPage() {
                       <button
                         key={mod.code}
                         onClick={() => toggleModule(mod.code)}
-                        className={`w-full text-left p-4 rounded-xl border-2 transition-all ${
+                        aria-pressed={selected}
+                        className={`text-left p-3.5 rounded-xl border-2 transition-all flex items-start gap-2.5 ${
                           selected
                             ? "border-blue-500 bg-blue-50"
-                            : "border-gray-200 hover:border-gray-300 bg-white"
+                            : "border-gray-200 hover:border-blue-300 bg-white"
                         }`}
                       >
-                        <div className="flex items-start justify-between">
-                          <div className="flex-1">
-                            <div className="flex items-center gap-2">
-                              <div
-                                className={`w-5 h-5 rounded border-2 flex items-center justify-center shrink-0 ${
-                                  selected
-                                    ? "bg-blue-600 border-blue-600"
-                                    : "border-gray-300"
-                                }`}
-                              >
-                                {selected && <Check className="w-3 h-3 text-white" />}
-                              </div>
-                              <span className="text-xs text-gray-400 font-mono">{mod.sortOrder}.</span>
-                              <span className="font-medium">{mod.name}</span>
-                            </div>
-                            {mod.description && (
-                              <p className="text-sm text-gray-500 mt-1 ml-7">
-                                {mod.description}
-                              </p>
-                            )}
+                        <div
+                          className={`w-5 h-5 rounded border-2 flex items-center justify-center shrink-0 mt-0.5 ${
+                            selected ? "bg-blue-600 border-blue-600" : "border-gray-300"
+                          }`}
+                          aria-hidden="true"
+                        >
+                          {selected && <Check className="w-3 h-3 text-white" />}
+                        </div>
+                        <div className="min-w-0">
+                          <div className="text-sm font-semibold">{mod.name}</div>
+                          {mod.description && (
+                            <p className="text-xs text-gray-500 mt-0.5 leading-snug">{mod.description}</p>
+                          )}
+                          <div
+                            className={`text-xs font-semibold mt-1.5 tabular-nums ${
+                              isNegotiable ? "text-orange-600" : "text-blue-700"
+                            }`}
+                          >
+                            {isNegotiable ? "협의" : `+${formatKRW(applyPriceRate(mod.basePrice, priceRate))}원`}
                           </div>
-                          <span className={`text-sm font-semibold shrink-0 ml-4 ${isNegotiable ? "text-orange-600" : "text-blue-600"}`}>
-                            {isNegotiable ? "협의" : `${formatKRW(applyPriceRate(mod.basePrice, priceRate))}원`}
-                          </span>
                         </div>
                       </button>
                     );
@@ -563,29 +569,31 @@ export default function RequestPage() {
                   .map((mod) => (
                     <div
                       key={mod.code}
-                      className="p-4 rounded-xl border-2 border-dashed border-green-300 bg-green-50"
+                      className="p-3.5 rounded-xl border-2 border-dashed border-green-300 bg-green-50 flex items-start gap-2.5"
                     >
-                      <div className="flex items-start justify-between">
-                        <div className="flex items-center gap-2">
-                          <div className="w-5 h-5 rounded bg-green-600 border-2 border-green-600 flex items-center justify-center">
-                            <Check className="w-3 h-3 text-white" />
-                          </div>
-                          <span className="text-xs text-gray-400 font-mono">{mod.sortOrder}.</span>
-                          <span className="font-medium">{mod.name}</span>
-                          <span className="text-xs bg-green-200 text-green-700 px-2 py-0.5 rounded-full">
+                      <div className="w-5 h-5 rounded bg-green-600 border-2 border-green-600 flex items-center justify-center shrink-0 mt-0.5">
+                        <Check className="w-3 h-3 text-white" />
+                      </div>
+                      <div className="min-w-0">
+                        <div className="text-sm font-semibold flex items-center gap-1.5 flex-wrap">
+                          {mod.name}
+                          <span className="text-[11px] bg-green-200 text-green-700 px-1.5 py-0.5 rounded-full font-medium">
                             자동 포함
                           </span>
                         </div>
-                        <span className="text-sm font-semibold text-green-600">
-                          {formatKRW(applyPriceRate(mod.basePrice, priceRate))}원
-                        </span>
+                        {mod.description && (
+                          <p className="text-xs text-gray-500 mt-0.5 leading-snug">{mod.description}</p>
+                        )}
+                        <div className="text-xs font-semibold mt-1.5 text-green-700 tabular-nums">
+                          +{formatKRW(applyPriceRate(mod.basePrice, priceRate))}원
+                        </div>
                       </div>
                     </div>
                   ))}
               </div>
 
-              {/* 소계 */}
-              <div className="mt-6 p-4 bg-gray-50 rounded-xl">
+              {/* 소계 (모바일/태블릿 — 데스크톱은 우측 요약 패널) */}
+              <div className="mt-6 p-4 bg-gray-50 rounded-xl lg:hidden">
                 <div className="flex justify-between text-sm text-gray-500 mb-1">
                   <span>소계</span>
                   <span>{formatKRW(subtotal)}원</span>
@@ -1169,6 +1177,79 @@ export default function RequestPage() {
               </button>
             )}
           </div>
+        </div>
+
+        {/* 실시간 견적 요약 (데스크톱) */}
+        <aside className="hidden lg:block sticky top-6">
+          <div className="bg-white rounded-xl border overflow-hidden">
+            <h3 className="text-sm font-semibold px-5 pt-4">
+              견적 요약 <span className="text-gray-400 font-normal">· 실시간</span>
+            </h3>
+            <div className="flex items-center justify-between gap-2 px-5 pt-1.5 pb-3 border-b border-gray-100 text-xs text-gray-500">
+              <span className="truncate">{form.eventName || "행사명을 입력해주세요"}</span>
+              <span
+                className={`px-2 py-0.5 rounded-full font-medium shrink-0 ${
+                  form.quoteType === "sale"
+                    ? "bg-orange-100 text-orange-700"
+                    : form.quoteType === "re_event"
+                    ? "bg-teal-100 text-teal-700"
+                    : "bg-blue-100 text-blue-700"
+                }`}
+              >
+                {TYPE_LABELS[form.quoteType]} {Math.round(priceRate * 100)}%
+              </span>
+            </div>
+            <ul className="px-5 py-3 border-b border-gray-100 space-y-1.5 text-[13px]">
+              {selectedModuleData.length === 0 && !form.useKsnetPayment && (
+                <li className="text-gray-400 py-1">기능을 선택하면 여기에 표시됩니다</li>
+              )}
+              {selectedModuleData.map((mod) => (
+                <li key={mod.code} className="flex justify-between gap-2 text-gray-700">
+                  <span className="truncate">{mod.name}</span>
+                  <span className="text-gray-500 tabular-nums shrink-0">
+                    {mod.code === "AI_STYLE" && mod.basePrice === 0
+                      ? "협의"
+                      : formatKRW(applyPriceRate(mod.basePrice, priceRate))}
+                  </span>
+                </li>
+              ))}
+              {form.screenComposition.includes("select_print") && (
+                <li className="flex justify-between gap-2 text-gray-700">
+                  <span className="truncate">선택 인쇄 기능</span>
+                  <span className="text-gray-500 tabular-nums shrink-0">
+                    {formatKRW(applyPriceRate(SELECT_PRINT_PRICE, priceRate))}
+                  </span>
+                </li>
+              )}
+              {form.useKsnetPayment && (
+                <li className="flex justify-between gap-2 text-gray-700">
+                  <span className="truncate">KSNET 결제 연동</span>
+                  <span className="text-gray-500 tabular-nums shrink-0">
+                    {formatKRW(applyPriceRate(KSNET_PRICE, priceRate))}
+                  </span>
+                </li>
+              )}
+            </ul>
+            <div className="px-5 py-3 bg-gray-50">
+              <div className="flex justify-between text-[13px] text-gray-500 py-0.5">
+                <span>소계</span>
+                <span className="tabular-nums">{formatKRW(subtotal)}원</span>
+              </div>
+              <div className="flex justify-between text-[13px] text-gray-500 py-0.5">
+                <span>VAT (10%)</span>
+                <span className="tabular-nums">{formatKRW(vat)}원</span>
+              </div>
+              <div className="flex justify-between items-baseline font-bold pt-2 mt-1.5 border-t">
+                <span>예상 합계</span>
+                <span className="text-lg text-blue-700 tabular-nums">{formatKRW(total)}원</span>
+              </div>
+            </div>
+            <p className="px-5 py-3 text-[11px] text-gray-400 leading-relaxed">
+              자동 산정된 예상 금액입니다. 개발팀 검토 과정에서 조정될 수 있으며, 확정 견적은 승인 후
+              이메일로 전달됩니다.
+            </p>
+          </div>
+        </aside>
         </div>
       </div>
     </div>

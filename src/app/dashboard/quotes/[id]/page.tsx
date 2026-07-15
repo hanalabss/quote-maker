@@ -89,6 +89,112 @@ interface QuoteCommentType {
   user: { name: string; role: string; team: string | null };
 }
 
+// 견적 생애주기 파이프라인 (반려/미진행은 이탈 상태로 별도 배너 표시)
+const PIPELINE: { key: QuoteStatus; label: string }[] = [
+  { key: "pending", label: "대기중" },
+  { key: "reviewing", label: "검토중" },
+  { key: "approved", label: "승인" },
+  { key: "confirmed", label: "확정" },
+  { key: "completed", label: "완료" },
+];
+
+function fmtDate(iso: string | null | undefined, withTime = false) {
+  if (!iso) return "";
+  const d = iso.includes("T") ? new Date(iso) : new Date(iso + "T00:00:00");
+  if (isNaN(d.getTime())) return iso;
+  return d.toLocaleDateString("ko-KR", {
+    month: "numeric",
+    day: "numeric",
+    ...(withTime ? { hour: "2-digit", minute: "2-digit" } : {}),
+  });
+}
+
+function StatusStepper({ quote }: { quote: QuoteDetail }) {
+  const idx = PIPELINE.findIndex((p) => p.key === quote.status);
+  if (idx === -1) {
+    // 이탈/사전 상태: 배너로 표시
+    if (quote.status === "rejected") {
+      return (
+        <div className="bg-red-50 border border-red-200 rounded-xl px-5 py-3 mb-6 flex items-center gap-2 text-sm text-red-700 font-medium">
+          <XCircle className="w-4 h-4 shrink-0" />
+          반려된 견적입니다. 아래 반려 사유를 확인해주세요.
+        </div>
+      );
+    }
+    if (quote.status === "lost") {
+      return (
+        <div className="bg-gray-100 border border-gray-200 rounded-xl px-5 py-3 mb-6 flex items-center gap-2 text-sm text-gray-600 font-medium">
+          <Ban className="w-4 h-4 shrink-0" />
+          미진행 처리된 견적입니다.
+        </div>
+      );
+    }
+    return null;
+  }
+
+  const subLabel = (key: QuoteStatus): string => {
+    switch (key) {
+      case "pending":
+        return fmtDate(quote.createdAt, true);
+      case "reviewing":
+        return quote.reviewedBy?.name ? `검토: ${quote.reviewedBy.name}` : "";
+      case "approved":
+        return "";
+      case "confirmed":
+        return quote.confirmedAt ? fmtDate(quote.confirmedAt) : "행사 확정 시";
+      case "completed":
+        return quote.confirmedEndDate ? `행사 종료 ${fmtDate(quote.confirmedEndDate)}` : "행사 종료 후";
+      default:
+        return "";
+    }
+  };
+
+  return (
+    <ol className="bg-white border rounded-xl px-4 sm:px-6 py-4 mb-6 flex overflow-x-auto" aria-label="견적 진행 상태">
+      {PIPELINE.map((p, i) => {
+        const state = i < idx ? "done" : i === idx ? "now" : "todo";
+        return (
+          <li key={p.key} className="flex-1 min-w-[76px] flex items-start gap-2 relative">
+            <span
+              className={`w-[26px] h-[26px] rounded-full flex items-center justify-center text-[13px] shrink-0 z-10 ${
+                state === "done"
+                  ? "bg-blue-600 text-white"
+                  : state === "now"
+                  ? "bg-white border-2 border-blue-600 text-blue-600 font-bold ring-4 ring-blue-100"
+                  : "bg-gray-100 text-gray-400"
+              }`}
+              aria-hidden="true"
+            >
+              {state === "done" ? <CheckCircle className="w-3.5 h-3.5" /> : i + 1}
+            </span>
+            {i < PIPELINE.length - 1 && (
+              <span
+                className={`absolute top-[12px] left-[34px] right-[8px] h-0.5 ${
+                  state === "done" ? "bg-blue-600" : "bg-gray-200"
+                }`}
+                aria-hidden="true"
+              />
+            )}
+            <span className="pr-2">
+              <span
+                className={`block text-[13px] leading-[26px] whitespace-nowrap ${
+                  state === "todo" ? "text-gray-400" : "font-semibold"
+                }`}
+              >
+                {p.label}
+                {state === "now" && <span className="sr-only"> (현재 상태)</span>}
+              </span>
+              <span className={`block text-[11px] leading-tight whitespace-nowrap ${state === "now" ? "text-blue-600" : "text-gray-400"}`}>
+                {subLabel(p.key)}
+              </span>
+            </span>
+          </li>
+        );
+      })}
+    </ol>
+  );
+}
+
 export default function QuoteDetailPage({
   params,
 }: {
@@ -255,6 +361,39 @@ export default function QuoteDetailPage({
     setEditItems((prev) => prev.filter((_, i) => i !== index));
   }
 
+  // 행사 확정 모달 열기 (일정 기본값 세팅)
+  function openConfirmModal() {
+    if (!quote) return;
+    setConfirmedDate(quote.eventDate || "");
+    setConfirmedEndDate(quote.eventEndDate || quote.eventDate || "");
+    // devDeadline 기본값: 요청 시 입력한 납기일 우선, 없으면 행사일 기준 자동 계산
+    if (quote.deadline) {
+      setDevDeadline(quote.deadline);
+    } else {
+      const eventStart = quote.eventDate ? new Date(quote.eventDate + "T00:00:00") : null;
+      if (eventStart) {
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const twoWeeksBefore = new Date(eventStart);
+        twoWeeksBefore.setDate(twoWeeksBefore.getDate() - 14);
+        const oneWeekBefore = new Date(eventStart);
+        oneWeekBefore.setDate(oneWeekBefore.getDate() - 7);
+        let deadline: Date;
+        if (twoWeeksBefore >= today) {
+          deadline = twoWeeksBefore;
+        } else if (oneWeekBefore >= today) {
+          deadline = oneWeekBefore;
+        } else {
+          deadline = today;
+        }
+        setDevDeadline(deadline.toISOString().split("T")[0]);
+      } else {
+        setDevDeadline("");
+      }
+    }
+    setShowConfirmModal(true);
+  }
+
   if (loading) {
     return (
       <div className="flex items-center justify-center py-20">
@@ -271,8 +410,14 @@ export default function QuoteDetailPage({
   const editVat = Math.round(editSubtotal * 0.1);
   const editTotal = editSubtotal + editVat;
 
+  const canAct = user?.role === "sales" || user?.role === "dev";
+  const showActionBar =
+    !editing &&
+    ((isDev && (quote.status === "pending" || quote.status === "reviewing")) ||
+      (canAct && ["approved", "confirmed", "completed", "lost"].includes(quote.status)));
+
   return (
-    <div>
+    <div className={showActionBar ? "pb-20" : ""}>
       {/* Header */}
       <div className="flex items-center justify-between mb-6 gap-2">
         <div className="flex items-center gap-2 sm:gap-3 min-w-0">
@@ -280,24 +425,28 @@ export default function QuoteDetailPage({
             <ArrowLeft className="w-5 h-5" />
           </Link>
           <div className="min-w-0">
-            <h1 className="text-base sm:text-xl font-bold flex items-center gap-2 flex-wrap">
-              <span className="truncate">{quote.quoteNumber}</span>
+            <p className="text-xs text-gray-500 font-mono truncate">
+              {quote.quoteNumber} · 요청 {new Date(quote.createdAt).toLocaleDateString("ko-KR")}
+            </p>
+            <h1 className="text-base sm:text-xl font-bold flex items-center gap-2 flex-wrap mt-0.5">
+              <span className="truncate">{quote.eventName}</span>
               <span
-                className={`text-xs px-2.5 py-0.5 rounded-full shrink-0 ${
+                className={`text-xs px-2.5 py-0.5 rounded-full shrink-0 font-medium ${
                   TYPE_COLORS[quote.type as QuoteType] || "bg-gray-100 text-gray-700"
                 }`}
               >
                 {TYPE_LABELS[quote.type as QuoteType] || quote.type}
               </span>
-              <span
-                className={`text-xs px-2.5 py-0.5 rounded-full shrink-0 ${
-                  STATUS_COLORS[quote.status]
-                }`}
-              >
-                {STATUS_LABELS[quote.status]}
-              </span>
+              {(quote.status === "rejected" || quote.status === "lost" || quote.status === "draft") && (
+                <span
+                  className={`text-xs px-2.5 py-0.5 rounded-full shrink-0 font-medium ${
+                    STATUS_COLORS[quote.status]
+                  }`}
+                >
+                  {STATUS_LABELS[quote.status]}
+                </span>
+              )}
             </h1>
-            <p className="text-xs sm:text-sm text-gray-500 truncate">{quote.eventName}</p>
           </div>
         </div>
         <div className="flex items-center gap-2 shrink-0">
@@ -334,16 +483,14 @@ export default function QuoteDetailPage({
         </div>
       </div>
 
+      <StatusStepper quote={quote} />
+
       <div className="grid lg:grid-cols-3 gap-6">
-        {/* 왼쪽: 기본 정보 */}
-        <div className="lg:col-span-1 space-y-4">
+        {/* 사이드: 행사/요청 정보 (모바일에서는 견적 항목 아래) */}
+        <div className="lg:col-span-1 order-2 space-y-4">
           <div className="bg-white rounded-xl border p-5">
-            <h3 className="font-medium mb-3">기본 정보</h3>
+            <h3 className="font-medium mb-3">행사 정보</h3>
             <dl className="space-y-2 text-sm">
-              <div className="flex justify-between">
-                <dt className="text-gray-500">행사명</dt>
-                <dd className="font-medium text-right">{quote.eventName}</dd>
-              </div>
               {quote.eventDate && (
                 <div className="flex justify-between">
                   <dt className="text-gray-500">행사일</dt>
@@ -506,8 +653,8 @@ export default function QuoteDetailPage({
           )}
         </div>
 
-        {/* 오른쪽: 견적 항목 + 액션 */}
-        <div className="lg:col-span-2 space-y-4">
+        {/* 메인: 견적 항목 + 검토/댓글 */}
+        <div className="lg:col-span-2 order-1 space-y-4">
           {/* 견적 항목 */}
           <div className="bg-white rounded-xl border p-5">
             <div className="flex items-center justify-between mb-4">
@@ -760,113 +907,6 @@ export default function QuoteDetailPage({
             </div>
           )}
 
-          {/* 확정 → 행사 완료 처리 또는 승인으로 되돌리기 */}
-          {quote.status === "confirmed" && (user?.role === "sales" || user?.role === "dev") && (
-            <div className="flex flex-wrap gap-2 sm:gap-3">
-              <button
-                onClick={() => updateStatus("completed")}
-                disabled={saving}
-                className="flex items-center gap-1.5 px-3 sm:px-5 py-2 sm:py-2.5 text-sm bg-slate-700 text-white rounded-lg hover:bg-slate-800 disabled:opacity-50 transition-colors"
-              >
-                <CheckCheck className="w-4 h-4" />
-                행사 완료 처리
-              </button>
-              <button
-                onClick={() => updateStatus("approved")}
-                disabled={saving}
-                className="flex items-center gap-1.5 px-3 sm:px-5 py-2 sm:py-2.5 text-sm bg-amber-600 text-white rounded-lg hover:bg-amber-700 disabled:opacity-50 transition-colors"
-              >
-                <RotateCcw className="w-4 h-4" />
-                승인 상태로 되돌리기
-              </button>
-            </div>
-          )}
-
-          {/* 완료 → 확정으로 되돌리기 */}
-          {quote.status === "completed" && (user?.role === "sales" || user?.role === "dev") && (
-            <div className="flex flex-wrap gap-2 sm:gap-3">
-              <button
-                onClick={() => updateStatus("confirmed")}
-                disabled={saving}
-                className="flex items-center gap-1.5 px-3 sm:px-5 py-2 sm:py-2.5 text-sm bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 disabled:opacity-50 transition-colors"
-              >
-                <RotateCcw className="w-4 h-4" />
-                확정 상태로 되돌리기
-              </button>
-            </div>
-          )}
-
-          {/* 미진행 → 승인으로 되돌리기 */}
-          {quote.status === "lost" && (user?.role === "sales" || user?.role === "dev") && (
-            <div className="flex flex-wrap gap-2 sm:gap-3">
-              <button
-                onClick={() => updateStatus("approved")}
-                disabled={saving}
-                className="flex items-center gap-1.5 px-3 sm:px-5 py-2 sm:py-2.5 text-sm bg-amber-600 text-white rounded-lg hover:bg-amber-700 disabled:opacity-50 transition-colors"
-              >
-                <RotateCcw className="w-4 h-4" />
-                승인 상태로 되돌리기
-              </button>
-            </div>
-          )}
-
-          {/* 사업팀 확정/미진행 버튼 - approved 상태일 때 */}
-          {quote.status === "approved" && (user?.role === "sales" || user?.role === "dev") && (
-            <div className="bg-amber-50 rounded-xl border border-amber-200 p-5">
-              <p className="text-sm text-amber-800 mb-4">
-                클라이언트 확인 후 <strong>확정</strong> 또는 <strong>미진행</strong>을 선택해주세요.
-              </p>
-              <div className="flex flex-wrap gap-2 sm:gap-3">
-                <button
-                  onClick={() => {
-                    // 기본값 세팅
-                    setConfirmedDate(quote.eventDate || "");
-                    setConfirmedEndDate(quote.eventEndDate || quote.eventDate || "");
-                    // devDeadline 기본값: 요청 시 입력한 납기일 우선, 없으면 행사일 기준 자동 계산
-                    if (quote.deadline) {
-                      setDevDeadline(quote.deadline);
-                    } else {
-                      const eventStart = quote.eventDate ? new Date(quote.eventDate + "T00:00:00") : null;
-                      if (eventStart) {
-                        const today = new Date();
-                        today.setHours(0, 0, 0, 0);
-                        const twoWeeksBefore = new Date(eventStart);
-                        twoWeeksBefore.setDate(twoWeeksBefore.getDate() - 14);
-                        const oneWeekBefore = new Date(eventStart);
-                        oneWeekBefore.setDate(oneWeekBefore.getDate() - 7);
-                        let deadline: Date;
-                        if (twoWeeksBefore >= today) {
-                          deadline = twoWeeksBefore;
-                        } else if (oneWeekBefore >= today) {
-                          deadline = oneWeekBefore;
-                        } else {
-                          deadline = today;
-                        }
-                        setDevDeadline(deadline.toISOString().split("T")[0]);
-                      } else {
-                        setDevDeadline("");
-                      }
-                    }
-                    setShowConfirmModal(true);
-                  }}
-                  disabled={saving}
-                  className="flex items-center gap-1.5 px-3 sm:px-5 py-2 sm:py-2.5 text-sm bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 disabled:opacity-50 transition-colors"
-                >
-                  <CalendarCheck className="w-4 h-4" />
-                  행사 확정
-                </button>
-                <button
-                  onClick={() => setShowLostModal(true)}
-                  disabled={saving}
-                  className="flex items-center gap-1.5 px-3 sm:px-5 py-2 sm:py-2.5 text-sm bg-gray-500 text-white rounded-lg hover:bg-gray-600 disabled:opacity-50 transition-colors"
-                >
-                  <Ban className="w-4 h-4" />
-                  미진행
-                </button>
-              </div>
-            </div>
-          )}
-
           {/* 댓글 섹션 */}
           <div className="bg-white rounded-xl border p-5">
             <h3 className="font-medium mb-4 flex items-center gap-1.5">
@@ -928,55 +968,6 @@ export default function QuoteDetailPage({
             </div>
           </div>
 
-          {/* 액션 버튼 - dev: pending이면 검토 시작만 */}
-          {isDev && quote.status === "pending" && (
-            <div className="flex flex-wrap gap-2 sm:gap-3">
-              <button
-                onClick={() => updateStatus("reviewing")}
-                disabled={saving}
-                className="flex items-center gap-1.5 px-3 sm:px-5 py-2 sm:py-2.5 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors"
-              >
-                검토 시작
-              </button>
-            </div>
-          )}
-
-          {/* 액션 버튼 - dev: reviewing이면 승인/반려 */}
-          {isDev && quote.status === "reviewing" && (
-            <div className="flex flex-wrap gap-2 sm:gap-3">
-              <button
-                onClick={() => updateStatus("approved")}
-                disabled={saving}
-                className="flex items-center gap-1.5 px-3 sm:px-5 py-2 sm:py-2.5 text-sm bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 transition-colors"
-              >
-                <CheckCircle className="w-4 h-4" />
-                승인
-              </button>
-              <button
-                onClick={() => setShowRejectModal(true)}
-                disabled={saving}
-                className="flex items-center gap-1.5 px-3 sm:px-5 py-2 sm:py-2.5 text-sm bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50 transition-colors"
-              >
-                <XCircle className="w-4 h-4" />
-                반려
-              </button>
-            </div>
-          )}
-
-          {/* 승인 되돌리기 - dev만, approved 상태일 때 */}
-          {isDev && quote.status === "approved" && (
-            <div className="flex flex-wrap gap-2 sm:gap-3">
-              <button
-                onClick={() => updateStatus("reviewing")}
-                disabled={saving}
-                className="flex items-center gap-1.5 px-3 sm:px-5 py-2 sm:py-2.5 text-sm bg-amber-600 text-white rounded-lg hover:bg-amber-700 disabled:opacity-50 transition-colors"
-              >
-                <RotateCcw className="w-4 h-4" />
-                승인 철회 (검토중으로)
-              </button>
-            </div>
-          )}
-
           {/* 삭제 버튼 - dev: 완전삭제, 요청자: 숨김 */}
           {(isDev || quote.createdById === user?.id) && (
             <div className="pt-4 border-t">
@@ -992,6 +983,140 @@ export default function QuoteDetailPage({
           )}
         </div>
       </div>
+
+      {/* 하단 고정 액션바: 스크롤 위치와 무관하게 상태 전환 가능 */}
+      {showActionBar && (
+        <div className="fixed bottom-0 left-0 right-0 z-20 bg-white/95 backdrop-blur border-t">
+          <div className="max-w-6xl mx-auto px-4 py-3 flex items-center gap-2">
+            <div className="min-w-0 mr-auto flex items-center gap-2 text-xs sm:text-sm text-gray-500">
+              <span
+                className={`inline-block px-2.5 py-0.5 rounded-full text-xs font-medium shrink-0 ${STATUS_COLORS[quote.status]}`}
+              >
+                {STATUS_LABELS[quote.status]}
+              </span>
+              <span className="hidden sm:inline truncate">
+                항목 {quote.items.length}개
+                {showPrice && (
+                  <>
+                    {" "}· 합계 <b className="text-gray-900 tabular-nums">{formatKRW(quote.totalAmount)}원</b>
+                  </>
+                )}
+              </span>
+              {quote.status === "approved" && (
+                <span className="hidden lg:inline text-amber-700">
+                  클라이언트 확인 후 확정 또는 미진행을 선택해주세요
+                </span>
+              )}
+            </div>
+
+            {isDev && quote.status === "pending" && (
+              <button
+                onClick={() => updateStatus("reviewing")}
+                disabled={saving}
+                className="flex items-center gap-1.5 px-5 py-2.5 text-sm font-medium bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors"
+              >
+                {saving && <Loader2 className="w-4 h-4 animate-spin" />}
+                검토 시작
+              </button>
+            )}
+
+            {isDev && quote.status === "reviewing" && (
+              <>
+                <button
+                  onClick={() => setShowRejectModal(true)}
+                  disabled={saving}
+                  className="flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium text-red-600 border border-red-200 bg-white rounded-lg hover:bg-red-50 disabled:opacity-50 transition-colors"
+                >
+                  <XCircle className="w-4 h-4" />
+                  반려
+                </button>
+                <button
+                  onClick={() => updateStatus("approved")}
+                  disabled={saving}
+                  className="flex items-center gap-1.5 px-6 py-2.5 text-sm font-medium bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors"
+                >
+                  {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle className="w-4 h-4" />}
+                  승인
+                </button>
+              </>
+            )}
+
+            {quote.status === "approved" && canAct && (
+              <>
+                {isDev && (
+                  <button
+                    onClick={() => updateStatus("reviewing")}
+                    disabled={saving}
+                    className="flex items-center gap-1.5 px-3 py-2.5 text-sm text-amber-700 rounded-lg hover:bg-amber-50 disabled:opacity-50 transition-colors"
+                  >
+                    <RotateCcw className="w-4 h-4" />
+                    <span className="hidden sm:inline">승인 철회</span>
+                  </button>
+                )}
+                <button
+                  onClick={() => setShowLostModal(true)}
+                  disabled={saving}
+                  className="flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium text-gray-600 border rounded-lg bg-white hover:bg-gray-50 disabled:opacity-50 transition-colors"
+                >
+                  <Ban className="w-4 h-4" />
+                  미진행
+                </button>
+                <button
+                  onClick={openConfirmModal}
+                  disabled={saving}
+                  className="flex items-center gap-1.5 px-5 py-2.5 text-sm font-medium bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 disabled:opacity-50 transition-colors"
+                >
+                  <CalendarCheck className="w-4 h-4" />
+                  행사 확정
+                </button>
+              </>
+            )}
+
+            {quote.status === "confirmed" && canAct && (
+              <>
+                <button
+                  onClick={() => updateStatus("approved")}
+                  disabled={saving}
+                  className="flex items-center gap-1.5 px-3 py-2.5 text-sm text-amber-700 rounded-lg hover:bg-amber-50 disabled:opacity-50 transition-colors"
+                >
+                  <RotateCcw className="w-4 h-4" />
+                  <span className="hidden sm:inline">승인으로 되돌리기</span>
+                </button>
+                <button
+                  onClick={() => updateStatus("completed")}
+                  disabled={saving}
+                  className="flex items-center gap-1.5 px-5 py-2.5 text-sm font-medium bg-slate-700 text-white rounded-lg hover:bg-slate-800 disabled:opacity-50 transition-colors"
+                >
+                  <CheckCheck className="w-4 h-4" />
+                  행사 완료 처리
+                </button>
+              </>
+            )}
+
+            {quote.status === "completed" && canAct && (
+              <button
+                onClick={() => updateStatus("confirmed")}
+                disabled={saving}
+                className="flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium text-emerald-700 border border-emerald-200 bg-white rounded-lg hover:bg-emerald-50 disabled:opacity-50 transition-colors"
+              >
+                <RotateCcw className="w-4 h-4" />
+                확정 상태로 되돌리기
+              </button>
+            )}
+
+            {quote.status === "lost" && canAct && (
+              <button
+                onClick={() => updateStatus("approved")}
+                disabled={saving}
+                className="flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium bg-amber-600 text-white rounded-lg hover:bg-amber-700 disabled:opacity-50 transition-colors"
+              >
+                <RotateCcw className="w-4 h-4" />
+                승인 상태로 되돌리기
+              </button>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* 삭제 확인 모달 */}
       {showDeleteConfirm && (
