@@ -1,0 +1,104 @@
+<!-- @dsCard name="시안 — 견적 요청 폼 v2" group="Proposals" subtitle="위저드 스테퍼 통일 · 실시간 견적 요약 패널" viewport="1120x860" -->
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Noto Sans KR','Apple SD Gothic Neo','Malgun Gothic',sans-serif;background:#f9fafb;color:#111827;-webkit-font-smoothing:antialiased}
+main{max-width:1000px;margin:0 auto;padding:28px 20px}
+.num{font-variant-numeric:tabular-nums}
+h1{font-size:20px;font-weight:700;margin-bottom:4px}
+.sub{font-size:13px;color:#6b7280;margin-bottom:22px}
+/* ── 위저드 스테퍼: 상세 페이지와 동일한 문법 ── */
+.stepper{display:flex;margin-bottom:24px}
+.step{flex:1;display:flex;align-items:center;gap:8px;position:relative}
+.step .ic{width:24px;height:24px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;flex-shrink:0;z-index:1}
+.step.done .ic{background:#2563eb;color:#fff}
+.step.now .ic{background:#fff;border:2px solid #2563eb;color:#2563eb;font-weight:700;box-shadow:0 0 0 4px rgba(37,99,235,.12)}
+.step.todo .ic{background:#f3f4f6;color:#9ca3af}
+.step p{font-size:13px;font-weight:600}
+.step.todo p{color:#9ca3af;font-weight:400}
+.step::after{content:"";flex:1;height:2px;background:#e5e7eb;margin:0 10px}
+.step.done::after{background:#2563eb}
+.step:last-child::after{display:none}
+/* ── 레이아웃 ── */
+.cols{display:grid;grid-template-columns:1fr 320px;gap:16px;align-items:start}
+.card{background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:22px}
+.card h2{font-size:16px;font-weight:600;margin-bottom:4px}
+.card .hint{font-size:12.5px;color:#9ca3af;margin-bottom:16px}
+/* 기능 토글 카드 */
+.mods{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.mod{border:1px solid #e5e7eb;border-radius:10px;padding:12px 14px;cursor:pointer;display:flex;gap:10px;align-items:flex-start;background:#fff;transition:border-color .15s}
+.mod:hover{border-color:#93c5fd}
+.mod.on{border-color:#2563eb;background:#eff6ff;box-shadow:0 0 0 1px #2563eb inset}
+.mod input{margin-top:3px;width:15px;height:15px;accent-color:#2563eb}
+.mod b{font-size:13.5px;font-weight:600;display:block}
+.mod small{font-size:12px;color:#6b7280;display:block;margin-top:1px;line-height:1.4}
+.mod .price{font-size:12px;color:#1d4ed8;font-weight:600;margin-top:4px;display:block}
+.mod.on .price{color:#1d4ed8}
+.navbtns{display:flex;justify-content:space-between;margin-top:20px}
+.prev{font-family:inherit;font-size:14px;padding:10px 18px;border-radius:8px;border:1px solid #d1d5db;background:#fff;color:#374151;cursor:pointer}
+.next{font-family:inherit;font-size:14px;font-weight:500;padding:10px 24px;border-radius:8px;border:none;background:#2563eb;color:#fff;cursor:pointer}
+.next:hover{background:#1d4ed8}
+/* ── 실시간 견적 요약 (sticky) ── */
+.est{position:sticky;top:20px}
+.est .card{padding:0;overflow:hidden}
+.est h3{font-size:14px;font-weight:600;padding:16px 18px 0}
+.est .type{display:flex;align-items:center;justify-content:space-between;font-size:12.5px;color:#6b7280;padding:6px 18px 12px;border-bottom:1px solid #f3f4f6}
+.badge{display:inline-block;padding:2px 10px;border-radius:9999px;font-size:12px;font-weight:500;background:#dbeafe;color:#1d4ed8}
+.est ul{list-style:none;padding:10px 18px;border-bottom:1px solid #f3f4f6}
+.est li{display:flex;justify-content:space-between;font-size:13px;color:#374151;padding:4px 0}
+.est li span:last-child{color:#6b7280}
+.est li.add{color:#1d4ed8;font-weight:500}
+.est li.add span:last-child{color:#1d4ed8}
+.est .tots{padding:12px 18px;background:#f9fafb}
+.est .row{display:flex;justify-content:space-between;font-size:13px;color:#6b7280;padding:2px 0}
+.est .tot{display:flex;justify-content:space-between;font-size:17px;font-weight:700;padding-top:8px;margin-top:6px;border-top:1px solid #e5e7eb}
+.est .tot span:last-child{color:#1d4ed8}
+.est .note{font-size:11.5px;color:#9ca3af;padding:10px 18px;line-height:1.5}
+</style>
+<main>
+  <h1>견적 요청</h1>
+  <p class="sub">폼을 제출하면 견적 초안이 자동 생성되고, 개발팀 검토 후 최종 확정됩니다.</p>
+
+  <div class="stepper">
+    <div class="step done"><span class="ic">✓</span><p>기본 정보</p></div>
+    <div class="step now"><span class="ic">2</span><p>기능 선택</p></div>
+    <div class="step todo"><span class="ic">3</span><p>상세 옵션</p></div>
+    <div class="step todo"><span class="ic">4</span><p>미리보기</p></div>
+  </div>
+
+  <div class="cols">
+    <div class="card">
+      <h2>필요한 기능을 선택하세요</h2>
+      <p class="hint">선택할 때마다 오른쪽 견적 요약이 바로 갱신됩니다. 확실하지 않은 기능은 비워두고 요청사항에 적어주세요.</p>
+      <div class="mods">
+        <label class="mod on"><input type="checkbox" checked><span><b>키오스크 UI 개발</b><small>기본 화면 흐름 (필수)</small><span class="price num">+200,000원</span></span></label>
+        <label class="mod on"><input type="checkbox" checked><span><b>인쇄/출력 로직</b><small>포토카드·영수증 출력</small><span class="price num">+200,000원</span></span></label>
+        <label class="mod on"><input type="checkbox" checked><span><b>카메라/촬영 기능</b><small>촬영 → 미리보기 → 재촬영</small><span class="price num">+150,000원</span></span></label>
+        <label class="mod"><input type="checkbox"><span><b>QR코드 업로드</b><small>모바일 사진 전송</small><span class="price num">+100,000원</span></span></label>
+        <label class="mod"><input type="checkbox"><span><b>텍스트 입력 기능</b><small>이름·문구 입력 후 인쇄</small><span class="price num">+100,000원</span></span></label>
+        <label class="mod"><input type="checkbox"><span><b>AI 화풍변환</b><small>사진을 일러스트풍으로 변환<br>※ 외부 API 사용료 별도</small><span class="price num">+500,000원</span></span></label>
+        <label class="mod"><input type="checkbox"><span><b>서버 연동/데이터 저장</b><small>참여 데이터 수집·통계</small><span class="price num">+500,000원</span></span></label>
+        <label class="mod on"><input type="checkbox" checked><span><b>테스트 및 유지보수</b><small>현장 리허설·행사 중 대응</small><span class="price num">+100,000원</span></span></label>
+      </div>
+      <div class="navbtns"><button class="prev">← 이전</button><button class="next">다음: 상세 옵션 →</button></div>
+    </div>
+
+    <aside class="est">
+      <div class="card">
+        <h3>견적 요약 <span style="color:#9ca3af;font-weight:400">· 실시간</span></h3>
+        <div class="type"><span>2026 강원 팝업스토어 포토카드</span><span class="badge">렌탈 100%</span></div>
+        <ul class="num">
+          <li><span>키오스크 UI 개발</span><span>200,000</span></li>
+          <li><span>인쇄/출력 로직</span><span>200,000</span></li>
+          <li class="add"><span>+ 카메라/촬영 기능</span><span>150,000</span></li>
+          <li><span>테스트 및 유지보수</span><span>100,000</span></li>
+        </ul>
+        <div class="tots num">
+          <div class="row"><span>소계</span><span>650,000원</span></div>
+          <div class="row"><span>VAT (10%)</span><span>65,000원</span></div>
+          <div class="tot"><span>예상 합계</span><span>715,000원</span></div>
+        </div>
+        <p class="note">자동 산정된 예상 금액입니다. 개발팀 검토 과정에서 조정될 수 있으며, 확정 견적은 승인 후 이메일로 전달됩니다.</p>
+      </div>
+    </aside>
+  </div>
+</main>

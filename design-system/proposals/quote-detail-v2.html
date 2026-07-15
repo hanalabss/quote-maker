@@ -1,0 +1,148 @@
+<!-- @dsCard name="시안 — 견적 상세 v2" group="Proposals" subtitle="상태 스테퍼 · 2컬럼 재배치 · 하단 고정 액션바" viewport="1120x1050" -->
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Noto Sans KR','Apple SD Gothic Neo','Malgun Gothic',sans-serif;background:#f9fafb;color:#111827;-webkit-font-smoothing:antialiased;padding-bottom:76px}
+main{max-width:1152px;margin:0 auto;padding:24px 20px}
+.num{font-variant-numeric:tabular-nums}
+.mono{font-family:ui-monospace,monospace}
+.badge{display:inline-block;padding:2px 10px;border-radius:9999px;font-size:12px;font-weight:500}
+/* ── 헤더 ── */
+.head{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:18px;gap:16px}
+.head .qn{font-size:12.5px;color:#6b7280;margin-bottom:4px}
+.head h1{font-size:22px;font-weight:700;display:flex;align-items:center;gap:10px}
+.head .acts{display:flex;gap:8px;flex-shrink:0}
+.btn{font-family:inherit;font-size:13px;font-weight:500;padding:8px 14px;border-radius:8px;border:1px solid #d1d5db;background:#fff;color:#374151;cursor:pointer;display:inline-flex;align-items:center;gap:6px}
+.btn:hover{background:#f9fafb}
+/* ── 스테퍼 (시그니처) ── */
+.stepper{background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:18px 24px;display:flex;margin-bottom:20px}
+.step{flex:1;display:flex;align-items:flex-start;gap:10px;position:relative}
+.step .ic{width:26px;height:26px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:13px;flex-shrink:0;z-index:1}
+.step.done .ic{background:#2563eb;color:#fff}
+.step.now .ic{background:#fff;border:2px solid #2563eb;color:#2563eb;font-weight:700;box-shadow:0 0 0 4px rgba(37,99,235,.12)}
+.step.todo .ic{background:#f3f4f6;color:#9ca3af}
+.step::after{content:"";position:absolute;top:13px;left:36px;right:10px;height:2px;background:#e5e7eb}
+.step.done::after{background:#2563eb}
+.step:last-child::after{display:none}
+.step p{font-size:13px;font-weight:600;line-height:26px}
+.step.todo p{color:#9ca3af;font-weight:400}
+.step small{display:block;font-size:11px;color:#9ca3af;line-height:1.3}
+.step.now small{color:#2563eb}
+/* ── 레이아웃 ── */
+.cols{display:grid;grid-template-columns:1fr 340px;gap:16px;align-items:start}
+.card{background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:20px;margin-bottom:16px}
+.card h3{font-size:14px;font-weight:600;margin-bottom:14px}
+/* 견적 항목 */
+table{width:100%;border-collapse:collapse}
+th{font-size:12px;font-weight:500;color:#6b7280;text-align:left;padding:8px 0;border-bottom:1px solid #e5e7eb}
+th.r,td.r{text-align:right}
+td{font-size:14px;padding:10px 0;border-bottom:1px solid #f3f4f6}
+td small{display:block;font-size:12px;color:#9ca3af}
+.sum{background:#f9fafb;border-radius:10px;padding:14px 16px;margin-top:14px}
+.sum .row{display:flex;justify-content:space-between;font-size:13.5px;color:#4b5563;padding:3px 0}
+.sum .tot{border-top:1px solid #e5e7eb;margin-top:8px;padding-top:10px;font-size:16px;font-weight:700;color:#111827}
+.sum .tot span:last-child{color:#1d4ed8}
+/* aside */
+.kv{display:flex;justify-content:space-between;gap:12px;font-size:13.5px;padding:5px 0}
+.kv dt{color:#6b7280;flex-shrink:0}
+.kv dd{font-weight:500;text-align:right}
+.sched .kv dd.warn{color:#dc2626;font-weight:700}
+.file{display:flex;align-items:center;gap:8px;font-size:13px;color:#374151;background:#f9fafb;border:1px solid #f3f4f6;border-radius:8px;padding:8px 10px;margin-top:6px}
+.file span{color:#9ca3af;margin-left:auto;font-size:12px}
+textarea{width:100%;font-family:inherit;font-size:13.5px;padding:10px 12px;border:1px solid #d1d5db;border-radius:8px;outline:none;resize:vertical}
+textarea:focus{border-color:#3b82f6;box-shadow:0 0 0 2px rgba(59,130,246,.35)}
+/* ── 하단 고정 액션바 ── */
+.actionbar{position:fixed;left:0;right:0;bottom:0;background:rgba(255,255,255,.95);backdrop-filter:blur(6px);border-top:1px solid #e5e7eb;padding:12px 20px}
+.actionbar .in{max-width:1152px;margin:0 auto;display:flex;align-items:center;gap:10px}
+.actionbar .ctx{font-size:13px;color:#6b7280;margin-right:auto}
+.actionbar .ctx b{color:#111827}
+.reject{font-family:inherit;font-size:14px;font-weight:500;padding:10px 20px;border-radius:8px;border:1px solid #fecaca;background:#fff;color:#dc2626;cursor:pointer}
+.reject:hover{background:#fef2f2}
+.approve{font-family:inherit;font-size:14px;font-weight:500;padding:10px 28px;border-radius:8px;border:none;background:#2563eb;color:#fff;cursor:pointer}
+.approve:hover{background:#1d4ed8}
+</style>
+<main>
+  <div class="head">
+    <div>
+      <p class="qn mono num">QT-20260701-001 · 요청 2026. 7. 1.</p>
+      <h1>SKT T1 전화부스 NFC 음원재생 <span class="badge" style="background:#dbeafe;color:#1d4ed8">렌탈</span></h1>
+    </div>
+    <div class="acts">
+      <button class="btn">⬇ Excel 다운로드</button>
+      <button class="btn">수정</button>
+    </div>
+  </div>
+
+  <!-- 상태 스테퍼: 지금 어디까지 왔고, 언제 통과했는지 -->
+  <div class="stepper">
+    <div class="step done"><span class="ic">✓</span><div><p>대기중</p><small>7/1 09:12</small></div></div>
+    <div class="step done"><span class="ic">✓</span><div><p>검토중</p><small>7/1 10:40 · 개발팀</small></div></div>
+    <div class="step now"><span class="ic">3</span><div><p>승인</p><small>검토 진행 중</small></div></div>
+    <div class="step todo"><span class="ic">4</span><div><p>확정</p><small>행사 확정 시</small></div></div>
+    <div class="step todo"><span class="ic">5</span><div><p>완료</p><small>행사 종료 후</small></div></div>
+  </div>
+
+  <div class="cols">
+    <div>
+      <div class="card">
+        <h3>견적 항목</h3>
+        <table>
+          <thead><tr><th>항목</th><th class="r">단가</th><th class="r">수량</th><th class="r">금액</th></tr></thead>
+          <tbody class="num">
+            <tr><td>키오스크 UI 개발<small>NFC 태그 → 선수 음원 재생/중지</small></td><td class="r">200,000</td><td class="r">1</td><td class="r">200,000</td></tr>
+            <tr><td>서버 연동/데이터 저장<small>3부스 × PC 1대 × 리더 5</small></td><td class="r">250,000</td><td class="r">1</td><td class="r">250,000</td></tr>
+            <tr><td>테스트 및 유지보수<small>상주 없음 · 원격 지원</small></td><td class="r">150,000</td><td class="r">1</td><td class="r">150,000</td></tr>
+          </tbody>
+        </table>
+        <div class="sum num">
+          <div class="row"><span>소계</span><span>600,000원</span></div>
+          <div class="row"><span>VAT (10%)</span><span>60,000원</span></div>
+          <div class="row tot"><span>합계 (VAT 포함)</span><span>660,000원</span></div>
+        </div>
+      </div>
+      <div class="card">
+        <h3>검토 메모 <span style="font-weight:400;color:#9ca3af">— 사업팀에게 공유됩니다</span></h3>
+        <textarea rows="3" placeholder="검토 의견을 입력하세요 (선택)">리더 5대 동시 인식은 테스트 완료. 음원 파일은 행사 3일 전까지 전달 필요.</textarea>
+      </div>
+    </div>
+
+    <aside>
+      <div class="card sched">
+        <h3>일정</h3>
+        <dl>
+          <div class="kv"><dt>행사 기간</dt><dd class="num">7/18 – 7/20</dd></div>
+          <div class="kv"><dt>요청 납기일</dt><dd class="num">7/16</dd></div>
+          <div class="kv"><dt>개발 마감</dt><dd class="warn num">7/17 (D-2)</dd></div>
+        </dl>
+      </div>
+      <div class="card">
+        <h3>요청자</h3>
+        <dl>
+          <div class="kv"><dt>이름</dt><dd>이매니저 · 사업팀</dd></div>
+          <div class="kv"><dt>연락처</dt><dd class="num">010-1234-5678</dd></div>
+          <div class="kv"><dt>이메일</dt><dd>lee@hanapf.kr</dd></div>
+        </dl>
+      </div>
+      <div class="card">
+        <h3>장비 / 환경</h3>
+        <dl>
+          <div class="kv"><dt>기기</dt><dd>키오스크 3대</dd></div>
+          <div class="kv"><dt>해상도</dt><dd class="num">1080×1920 (세로)</dd></div>
+          <div class="kv"><dt>프린터</dt><dd>없음</dd></div>
+          <div class="kv"><dt>네트워크</dt><dd>Wi-Fi</dd></div>
+        </dl>
+      </div>
+      <div class="card">
+        <h3>첨부 파일 (2)</h3>
+        <div class="file">📄 부스_도면.pdf<span>1.2MB</span></div>
+        <div class="file">🖼 참고_시안.png<span>640KB</span></div>
+      </div>
+    </aside>
+  </div>
+</main>
+
+<!-- 검토자용 고정 액션바: 스크롤 위치와 무관하게 결정 가능 -->
+<div class="actionbar"><div class="in">
+  <span class="ctx">검토중 · 검토자 <b>나</b> · 항목 3개 · 합계 <b class="num">660,000원</b></span>
+  <button class="reject">반려</button>
+  <button class="approve">승인</button>
+</div></div>

@@ -1,0 +1,35 @@
+<!-- @dsCard name="Form Inputs" group="Components" subtitle="텍스트 · 검색 · 셀렉트 · 체크박스 · 에러 상태" viewport="760x640" -->
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Noto Sans KR','Apple SD Gothic Neo','Malgun Gothic',sans-serif;background:#f9fafb;color:#111827;padding:28px;-webkit-font-smoothing:antialiased}
+h2{font-size:13px;font-weight:600;color:#6b7280;text-transform:uppercase;letter-spacing:.05em;margin:22px 0 10px}
+h2:first-child{margin-top:0}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;max-width:640px}
+label{display:block;font-size:14px;font-weight:500;color:#374151;margin-bottom:6px}
+input[type=text],input[type=password],select,textarea{width:100%;font-family:inherit;font-size:14px;padding:10px 16px;border:1px solid #d1d5db;border-radius:8px;outline:none;background:#fff;color:#111827}
+input:focus,select:focus,textarea:focus{border-color:#3b82f6;box-shadow:0 0 0 2px rgba(59,130,246,.4)}
+::placeholder{color:#9ca3af}
+.search{position:relative}
+.search svg{position:absolute;left:12px;top:50%;transform:translateY(-50%);width:16px;height:16px}
+.search input{padding-left:40px}
+.err input{border-color:#dc2626}
+.err p{font-size:12px;color:#dc2626;margin-top:4px}
+.check{display:flex;align-items:center;gap:8px;cursor:pointer}
+.check input{width:16px;height:16px;accent-color:#2563eb}
+.check span{font-size:14px;color:#4b5563;font-weight:400}
+</style>
+<h2>Text / Select / Textarea</h2>
+<div class="grid">
+  <div><label>행사명</label><input type="text" placeholder="예: SKT T1 팬미팅 포토부스"></div>
+  <div><label>견적 유형</label><select><option>렌탈 (기본가)</option><option>재행사 (70% 할인)</option><option>판매 (130%)</option></select></div>
+  <div style="grid-column:1/-1"><label>요청 사항</label><textarea rows="3" placeholder="필요한 기능을 자유롭게 적어주세요"></textarea></div>
+</div>
+<h2>Search</h2>
+<div class="search" style="max-width:640px">
+  <svg viewBox="0 0 24 24" fill="none" stroke="#9ca3af" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m21 21-4-4"/></svg>
+  <input type="text" placeholder="행사명, 요청자, 견적번호 검색">
+</div>
+<h2>Error state</h2>
+<div class="err" style="max-width:312px"><label>이메일</label><input type="text" value="hanalabs@"><p>올바른 이메일 형식이 아닙니다</p></div>
+<h2>Checkbox</h2>
+<label class="check"><input type="checkbox" checked><span>아이디 저장</span></label>

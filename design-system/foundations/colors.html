@@ -1,0 +1,51 @@
+<!-- @dsCard name="Colors" group="Foundations" subtitle="Primary blue · neutral gray · 상태/유형 시맨틱 컬러" viewport="880x720" -->
+<style>
+:root{--gray-50:#f9fafb;--gray-100:#f3f4f6;--gray-200:#e5e7eb;--gray-300:#d1d5db;--gray-400:#9ca3af;--gray-500:#6b7280;--gray-600:#4b5563;--gray-700:#374151;--gray-900:#111827;--blue-50:#eff6ff;--blue-100:#dbeafe;--blue-500:#3b82f6;--blue-600:#2563eb;--blue-700:#1d4ed8}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Noto Sans KR','Apple SD Gothic Neo','Malgun Gothic',sans-serif;background:#f9fafb;color:#111827;padding:28px;-webkit-font-smoothing:antialiased}
+h2{font-size:13px;font-weight:600;color:#6b7280;text-transform:uppercase;letter-spacing:.05em;margin:24px 0 10px}
+h2:first-child{margin-top:0}
+.row{display:flex;gap:8px;flex-wrap:wrap}
+.sw{width:96px}
+.chip{height:56px;border-radius:8px;border:1px solid rgba(0,0,0,.06)}
+.sw p{font-size:11px;margin-top:5px;color:#374151}
+.sw span{display:block;font-size:10px;color:#9ca3af;font-family:ui-monospace,monospace}
+.pair{display:flex;align-items:center;gap:10px;background:#fff;border:1px solid #e5e7eb;border-radius:8px;padding:10px 12px;width:200px}
+.pair .badge{padding:2px 10px;border-radius:9999px;font-size:12px;font-weight:500}
+.pair small{font-size:11px;color:#9ca3af}
+</style>
+<h2>Primary — Blue (주요 액션 · 링크 · 포커스)</h2>
+<div class="row">
+  <div class="sw"><div class="chip" style="background:#eff6ff"></div><p>blue-50<span>#eff6ff</span></p></div>
+  <div class="sw"><div class="chip" style="background:#dbeafe"></div><p>blue-100<span>#dbeafe</span></p></div>
+  <div class="sw"><div class="chip" style="background:#3b82f6"></div><p>blue-500<span>#3b82f6 · focus ring</span></p></div>
+  <div class="sw"><div class="chip" style="background:#2563eb"></div><p>blue-600<span>#2563eb · 버튼</span></p></div>
+  <div class="sw"><div class="chip" style="background:#1d4ed8"></div><p>blue-700<span>#1d4ed8 · hover</span></p></div>
+</div>
+<h2>Neutral — Gray (배경 · 텍스트 · 보더)</h2>
+<div class="row">
+  <div class="sw"><div class="chip" style="background:#f9fafb"></div><p>gray-50<span>페이지 배경</span></p></div>
+  <div class="sw"><div class="chip" style="background:#f3f4f6"></div><p>gray-100<span>hover 배경</span></p></div>
+  <div class="sw"><div class="chip" style="background:#e5e7eb"></div><p>gray-200<span>보더</span></p></div>
+  <div class="sw"><div class="chip" style="background:#9ca3af"></div><p>gray-400<span>플레이스홀더</span></p></div>
+  <div class="sw"><div class="chip" style="background:#6b7280"></div><p>gray-500<span>보조 텍스트</span></p></div>
+  <div class="sw"><div class="chip" style="background:#374151"></div><p>gray-700<span>레이블</span></p></div>
+  <div class="sw"><div class="chip" style="background:#111827"></div><p>gray-900<span>본문</span></p></div>
+</div>
+<h2>Semantic — 견적 상태 8종</h2>
+<div class="row">
+  <div class="pair"><span class="badge" style="background:#f3f4f6;color:#374151">임시저장</span><small>gray-100 / 700</small></div>
+  <div class="pair"><span class="badge" style="background:#fef9c3;color:#a16207">대기중</span><small>yellow-100 / 700</small></div>
+  <div class="pair"><span class="badge" style="background:#dbeafe;color:#1d4ed8">검토중</span><small>blue-100 / 700</small></div>
+  <div class="pair"><span class="badge" style="background:#dcfce7;color:#15803d">승인</span><small>green-100 / 700</small></div>
+  <div class="pair"><span class="badge" style="background:#fee2e2;color:#b91c1c">반려</span><small>red-100 / 700</small></div>
+  <div class="pair"><span class="badge" style="background:#d1fae5;color:#047857">확정</span><small>emerald-100 / 700</small></div>
+  <div class="pair"><span class="badge" style="background:#f1f5f9;color:#334155">완료</span><small>slate-100 / 700</small></div>
+  <div class="pair"><span class="badge" style="background:#f3f4f6;color:#6b7280">미진행</span><small>gray-100 / 500</small></div>
+</div>
+<h2>Semantic — 견적 유형 3종</h2>
+<div class="row">
+  <div class="pair"><span class="badge" style="background:#dbeafe;color:#1d4ed8">렌탈</span><small>기본가 100%</small></div>
+  <div class="pair"><span class="badge" style="background:#ccfbf1;color:#0f766e">재행사</span><small>30% (70% 할인)</small></div>
+  <div class="pair"><span class="badge" style="background:#ffedd5;color:#c2410c">판매</span><small>130%</small></div>
+</div>

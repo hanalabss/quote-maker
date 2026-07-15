@@ -1,0 +1,43 @@
+/* QuoteMaker Design Tokens — Tailwind v4 값 추출 (src/app 전반에서 사용 중인 클래스 기준) */
+:root {
+  /* Neutral */
+  --gray-50: #f9fafb;
+  --gray-100: #f3f4f6;
+  --gray-200: #e5e7eb;
+  --gray-300: #d1d5db;
+  --gray-400: #9ca3af;
+  --gray-500: #6b7280;
+  --gray-600: #4b5563;
+  --gray-700: #374151;
+  --gray-900: #111827;
+
+  /* Primary (blue) */
+  --blue-50: #eff6ff;
+  --blue-100: #dbeafe;
+  --blue-500: #3b82f6;
+  --blue-600: #2563eb; /* 주요 액션 버튼 */
+  --blue-700: #1d4ed8; /* hover */
+  --blue-800: #1e40af;
+
+  /* Status */
+  --yellow-100: #fef9c3; --yellow-600: #ca8a04; --yellow-700: #a16207; /* 대기중 */
+  --green-100: #dcfce7;  --green-600: #16a34a;  --green-700: #15803d;  /* 승인 */
+  --emerald-100: #d1fae5; --emerald-600: #059669; --emerald-700: #047857; /* 확정 */
+  --red-50: #fef2f2; --red-100: #fee2e2; --red-600: #dc2626; --red-700: #b91c1c; /* 반려/위험 */
+  --slate-100: #f1f5f9; --slate-600: #475569; --slate-700: #334155; /* 완료 */
+  --amber-600: #d97706; /* D-day 경고 */
+
+  /* Quote type */
+  --orange-100: #ffedd5; --orange-700: #c2410c; /* 판매 */
+  --teal-100: #ccfbf1;   --teal-700: #0f766e;   /* 재행사 */
+
+  /* Radius */
+  --radius-md: 6px;   /* rounded-md */
+  --radius-lg: 8px;   /* rounded-lg  — 버튼/인풋 */
+  --radius-xl: 12px;  /* rounded-xl  — 카드/테이블 컨테이너 */
+  --radius-2xl: 16px; /* rounded-2xl — 로그인 카드 */
+  --radius-full: 9999px; /* 배지 */
+
+  /* Typography */
+  --font-sans: 'Noto Sans KR', 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif;
+}

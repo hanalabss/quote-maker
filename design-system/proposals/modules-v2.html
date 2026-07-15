@@ -1,0 +1,130 @@
+<!-- @dsCard name="시안 — 모듈 단가표 v2" group="Proposals" subtitle="유형별 환산가 미리보기 · 드래그 순서 · 사용 토글" viewport="1120x760" -->
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Noto Sans KR','Apple SD Gothic Neo','Malgun Gothic',sans-serif;background:#f9fafb;color:#111827;-webkit-font-smoothing:antialiased}
+main{max-width:1152px;margin:0 auto;padding:28px 20px}
+.num{font-variant-numeric:tabular-nums}
+.top{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:20px;gap:16px}
+h1{font-size:22px;font-weight:700}
+.sub{font-size:13px;color:#6b7280;margin-top:4px}
+.save{font-family:inherit;font-size:13px;font-weight:500;padding:9px 18px;border-radius:8px;border:none;background:#f3f4f6;color:#9ca3af;cursor:not-allowed;display:inline-flex;align-items:center;gap:6px}
+.save.on{background:#2563eb;color:#fff;cursor:pointer}
+.legend{display:flex;gap:8px;margin-bottom:14px;font-size:12px;color:#6b7280;align-items:center;flex-wrap:wrap}
+.legend .badge{padding:2px 10px;border-radius:9999px;font-weight:500;font-size:12px}
+.wrap{background:#fff;border:1px solid #e5e7eb;border-radius:12px;overflow:hidden}
+table{width:100%;border-collapse:collapse}
+thead{background:#f9fafb;border-bottom:1px solid #e5e7eb}
+th{padding:11px 12px;font-size:12px;font-weight:500;color:#6b7280;text-align:left;white-space:nowrap}
+th.r,td.r{text-align:right}th.c,td.c{text-align:center}
+th.rate{color:#9ca3af;font-weight:400}
+td{padding:12px;font-size:14px;border-top:1px solid #f3f4f6;vertical-align:middle}
+tbody tr:hover{background:#f9fafb}
+.grip{color:#d1d5db;cursor:grab;font-size:15px;letter-spacing:-1px;user-select:none}
+.code{font-family:ui-monospace,monospace;font-size:11px;color:#6b7280;background:#f3f4f6;border-radius:5px;padding:2px 7px;white-space:nowrap}
+.name b{font-weight:600;font-size:14px;display:block}
+.name small{font-size:12px;color:#9ca3af;display:block;margin-top:1px}
+.cat{font-size:11.5px;color:#4b5563;background:#f3f4f6;border-radius:9999px;padding:2px 9px;white-space:nowrap}
+.price{font-weight:600}
+.price input{width:96px;font-family:inherit;font-size:14px;font-weight:600;text-align:right;padding:5px 8px;border:1px solid transparent;border-radius:6px;background:transparent}
+.price input:hover{border-color:#d1d5db;background:#fff}
+.price input:focus{border-color:#3b82f6;background:#fff;outline:none;box-shadow:0 0 0 2px rgba(59,130,246,.25)}
+.deriv{font-size:12.5px;color:#9ca3af}
+.chip{display:inline-block;font-size:11px;background:#dcfce7;color:#15803d;border-radius:9999px;padding:2px 8px;font-weight:500}
+.sw{width:34px;height:19px;border-radius:9999px;background:#2563eb;position:relative;display:inline-block;cursor:pointer}
+.sw::after{content:"";position:absolute;top:2px;left:17px;width:15px;height:15px;border-radius:50%;background:#fff;box-shadow:0 1px 2px rgba(0,0,0,.2)}
+.sw.off{background:#e5e7eb}
+.sw.off::after{left:2px}
+.nego{color:#c2410c;font-weight:600;font-size:13px}
+</style>
+<main>
+  <div class="top">
+    <div>
+      <h1>모듈 가격 관리</h1>
+      <p class="sub">단가를 클릭해 바로 수정하고, 좌측 핸들로 순서를 바꿀 수 있습니다. 유형별 환산가가 자동 계산됩니다.</p>
+    </div>
+    <button class="save on">↑ 변경사항 저장 <span style="background:rgba(255,255,255,.25);border-radius:9999px;padding:0 7px;font-size:11px">2</span></button>
+  </div>
+  <div class="legend">
+    환산 배율:
+    <span class="badge" style="background:#dbeafe;color:#1d4ed8">렌탈 100%</span>
+    <span class="badge" style="background:#ccfbf1;color:#0f766e">재행사 30%</span>
+    <span class="badge" style="background:#ffedd5;color:#c2410c">판매 130%</span>
+  </div>
+  <div class="wrap">
+    <table>
+      <thead><tr>
+        <th style="width:34px"></th>
+        <th>모듈</th>
+        <th class="c">분류</th>
+        <th class="r">기본 단가</th>
+        <th class="r rate">재행사 30%</th>
+        <th class="r rate">판매 130%</th>
+        <th class="c">자동 포함</th>
+        <th class="c">사용</th>
+      </tr></thead>
+      <tbody class="num">
+        <tr>
+          <td class="grip">⠿</td>
+          <td class="name"><b>키오스크 UI 개발 <span class="code">UI_BASIC</span></b><small>키오스크 화면 UI 디자인 및 개발</small></td>
+          <td class="c"><span class="cat">공통</span></td>
+          <td class="r price"><input value="200,000"></td>
+          <td class="r deriv">60,000</td>
+          <td class="r deriv">260,000</td>
+          <td class="c">—</td>
+          <td class="c"><span class="sw"></span></td>
+        </tr>
+        <tr>
+          <td class="grip">⠿</td>
+          <td class="name"><b>카메라/촬영 기능 <span class="code">CAM_PHOTO</span></b><small>웹캠 연동 사진 촬영 및 미리보기</small></td>
+          <td class="c"><span class="cat">카메라</span></td>
+          <td class="r price"><input value="150,000"></td>
+          <td class="r deriv">45,000</td>
+          <td class="r deriv">195,000</td>
+          <td class="c">—</td>
+          <td class="c"><span class="sw"></span></td>
+        </tr>
+        <tr style="background:#eff6ff">
+          <td class="grip">⠿</td>
+          <td class="name"><b>QR코드 업로드 <span class="code">QR_UPLOAD</span></b><small>QR코드 스캔을 통한 이미지/데이터 업로드 · 방금 수정됨</small></td>
+          <td class="c"><span class="cat">QR</span></td>
+          <td class="r price"><input value="150,000" style="border-color:#3b82f6;background:#fff"></td>
+          <td class="r deriv">45,000</td>
+          <td class="r deriv">195,000</td>
+          <td class="c">—</td>
+          <td class="c"><span class="sw"></span></td>
+        </tr>
+        <tr>
+          <td class="grip">⠿</td>
+          <td class="name"><b>AI 화풍변환 <span class="code">AI_STYLE</span></b><small>자사 서버 AI 화풍변환 · 과금 방식 별도 협의</small></td>
+          <td class="c"><span class="cat">AI</span></td>
+          <td class="r"><span class="nego">협의</span></td>
+          <td class="r deriv">—</td>
+          <td class="r deriv">—</td>
+          <td class="c">—</td>
+          <td class="c"><span class="sw"></span></td>
+        </tr>
+        <tr>
+          <td class="grip">⠿</td>
+          <td class="name"><b>테스트 및 유지보수 <span class="code">TEST_QA</span></b><small>개발 완료 후 테스트, 현장 리허설 및 당일 유지보수</small></td>
+          <td class="c"><span class="cat">공통</span></td>
+          <td class="r price"><input value="100,000"></td>
+          <td class="r deriv">30,000</td>
+          <td class="r deriv">130,000</td>
+          <td class="c"><span class="chip">자동</span></td>
+          <td class="c"><span class="sw"></span></td>
+        </tr>
+        <tr style="opacity:.5">
+          <td class="grip">⠿</td>
+          <td class="name"><b>레거시 결제 모듈 <span class="code">PAY_OLD</span></b><small>미사용 — 신규 견적에 노출되지 않음</small></td>
+          <td class="c"><span class="cat">결제</span></td>
+          <td class="r price"><input value="300,000"></td>
+          <td class="r deriv">90,000</td>
+          <td class="r deriv">390,000</td>
+          <td class="c">—</td>
+          <td class="c"><span class="sw off"></span></td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <p style="font-size:12px;color:#9ca3af;margin-top:10px">사업팀(읽기 전용)에게는 편집 컨트롤 없이 동일 표가 단가표로 표시됩니다.</p>
+</main>

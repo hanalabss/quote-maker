@@ -1,0 +1,46 @@
+<!-- @dsCard name="Buttons" group="Components" subtitle="Primary / secondary / danger / ghost · disabled · 로딩" viewport="760x560" -->
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Noto Sans KR','Apple SD Gothic Neo','Malgun Gothic',sans-serif;background:#f9fafb;color:#111827;padding:28px;-webkit-font-smoothing:antialiased}
+h2{font-size:13px;font-weight:600;color:#6b7280;text-transform:uppercase;letter-spacing:.05em;margin:22px 0 10px}
+h2:first-child{margin-top:0}
+.row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+button{font-family:inherit;font-size:14px;font-weight:500;border:none;cursor:pointer;border-radius:8px;padding:10px 16px;display:inline-flex;align-items:center;gap:8px;transition:background-color .15s}
+.primary{background:#2563eb;color:#fff}.primary:hover{background:#1d4ed8}
+.secondary{background:#fff;color:#374151;border:1px solid #d1d5db}.secondary:hover{background:#f9fafb}
+.danger{background:#dc2626;color:#fff}.danger:hover{background:#b91c1c}
+.success{background:#16a34a;color:#fff}.success:hover{background:#15803d}
+.ghost{background:transparent;color:#4b5563}.ghost:hover{background:#f3f4f6}
+.link{background:none;color:#2563eb;padding:0;border-radius:0;font-weight:500}.link:hover{color:#1e40af}
+button:disabled{opacity:.5;cursor:not-allowed}
+.sm{font-size:12px;padding:6px 10px}
+.spin{width:16px;height:16px;border:2px solid rgba(255,255,255,.4);border-top-color:#fff;border-radius:50%;animation:r 1s linear infinite}
+@keyframes r{to{transform:rotate(360deg)}}
+svg{width:16px;height:16px}
+</style>
+<h2>Variants</h2>
+<div class="row">
+  <button class="primary">+ 새 견적 요청</button>
+  <button class="secondary">취소</button>
+  <button class="success">✓ 승인</button>
+  <button class="danger">반려</button>
+  <button class="ghost">임시저장</button>
+  <button class="link">+ 새 견적 요청하기</button>
+</div>
+<h2>States</h2>
+<div class="row">
+  <button class="primary" disabled>로그인</button>
+  <button class="primary"><span class="spin"></span>로그인 중...</button>
+  <button class="secondary" disabled>수정</button>
+</div>
+<h2>Sizes</h2>
+<div class="row">
+  <button class="primary sm">Excel 다운로드</button>
+  <button class="primary">견적 제출</button>
+  <button class="primary" style="width:280px;justify-content:center">로그인</button>
+</div>
+<h2>Icon buttons</h2>
+<div class="row">
+  <button class="ghost" style="padding:8px" aria-label="내 정보"><svg viewBox="0 0 24 24" fill="none" stroke="#6b7280" stroke-width="2" style="width:20px;height:20px"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-6 8-6s8 2 8 6"/></svg></button>
+  <button class="ghost" style="padding:8px" aria-label="삭제"><svg viewBox="0 0 24 24" fill="none" stroke="#dc2626" stroke-width="2" style="width:18px;height:18px"><path d="M3 6h18M8 6V4h8v2m-9 0v14h10V6"/></svg></button>
+</div>
