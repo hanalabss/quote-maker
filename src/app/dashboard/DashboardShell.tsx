@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { FileText, Package, UserCircle, CalendarDays } from "lucide-react";
+import { FileText, Package, UserCircle, CalendarDays, BarChart3 } from "lucide-react";
 
 export function DashboardShell({
   isDev,
@@ -61,6 +61,16 @@ export function DashboardShell({
                 >
                   <Package className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                   모듈
+                </Link>
+              )}
+              {isDev && (
+                <Link
+                  href="/dashboard/reports"
+                  className={navLinkClass("/dashboard/reports")}
+                  aria-current={pathname.startsWith("/dashboard/reports") ? "page" : undefined}
+                >
+                  <BarChart3 className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                  리포트
                 </Link>
               )}
             </nav>
