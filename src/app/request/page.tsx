@@ -1197,7 +1197,7 @@ export default function RequestPage() {
                       {form.notes && (
                         <div className="sm:col-span-2">
                           <dt className="text-gray-500">기타 요청</dt>
-                          <dd className="font-medium whitespace-pre-wrap">{form.notes}</dd>
+                          <dd className="font-medium whitespace-pre-wrap break-words">{form.notes}</dd>
                         </div>
                       )}
                     </dl>

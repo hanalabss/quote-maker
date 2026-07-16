@@ -580,9 +580,9 @@ export default function QuoteDetailPage({
                 </div>
               )}
               {quote.venue && (
-                <div className="flex justify-between">
-                  <dt className="text-gray-500">장소</dt>
-                  <dd>{quote.venue}</dd>
+                <div className="flex justify-between gap-4">
+                  <dt className="text-gray-500 shrink-0">장소</dt>
+                  <dd className="break-words text-right">{quote.venue}</dd>
                 </div>
               )}
               {quote.deadline && (
@@ -592,9 +592,9 @@ export default function QuoteDetailPage({
                 </div>
               )}
               {quote.expectedVisitors && (
-                <div className="flex justify-between">
-                  <dt className="text-gray-500">예상 방문객</dt>
-                  <dd>{quote.expectedVisitors}</dd>
+                <div className="flex justify-between gap-4">
+                  <dt className="text-gray-500 shrink-0">예상 방문객</dt>
+                  <dd className="break-words text-right">{quote.expectedVisitors}</dd>
                 </div>
               )}
             </dl>
@@ -614,9 +614,9 @@ export default function QuoteDetailPage({
                 </div>
               )}
               {quote.requesterEmail && (
-                <div className="flex justify-between">
-                  <dt className="text-gray-500">이메일</dt>
-                  <dd>{quote.requesterEmail}</dd>
+                <div className="flex justify-between gap-4">
+                  <dt className="text-gray-500 shrink-0">이메일</dt>
+                  <dd className="break-all text-right">{quote.requesterEmail}</dd>
                 </div>
               )}
             </dl>
@@ -633,9 +633,9 @@ export default function QuoteDetailPage({
                   </div>
                 )}
                 {quote.screenResolution && (
-                  <div className="flex justify-between">
-                    <dt className="text-gray-500">해상도</dt>
-                    <dd>{quote.screenResolution}</dd>
+                  <div className="flex justify-between gap-4">
+                    <dt className="text-gray-500 shrink-0">해상도</dt>
+                    <dd className="break-all text-right">{quote.screenResolution}</dd>
                   </div>
                 )}
                 {quote.screenComposition && (
@@ -677,9 +677,9 @@ export default function QuoteDetailPage({
                   </div>
                 )}
                 {quote.printSize && (
-                  <div className="flex justify-between">
-                    <dt className="text-gray-500">인쇄 사이즈</dt>
-                    <dd>{quote.printSize}</dd>
+                  <div className="flex justify-between gap-4">
+                    <dt className="text-gray-500 shrink-0">인쇄 사이즈</dt>
+                    <dd className="break-all text-right">{quote.printSize}</dd>
                   </div>
                 )}
               </dl>
@@ -689,7 +689,7 @@ export default function QuoteDetailPage({
           {quote.notes && (
             <div className="bg-white rounded-xl border p-5">
               <h3 className="font-medium mb-2">기타 요청사항</h3>
-              <p className="text-sm text-gray-600 whitespace-pre-wrap">{quote.notes}</p>
+              <p className="text-sm text-gray-600 whitespace-pre-wrap break-words">{quote.notes}</p>
             </div>
           )}
 
@@ -874,7 +874,7 @@ export default function QuoteDetailPage({
                         <td className="py-2.5">
                           <div className="font-medium">{item.itemName}</div>
                           {item.description && (
-                            <div className="text-xs text-gray-500">{item.description}</div>
+                            <div className="text-xs text-gray-500 break-words">{item.description}</div>
                           )}
                         </td>
                         {showPrice && <td className="py-2.5 text-right whitespace-nowrap">{formatKRW(item.unitPrice)}원</td>}
@@ -927,7 +927,7 @@ export default function QuoteDetailPage({
                 <RotateCcw className="w-4 h-4" />
                 사업팀 수정 요청
               </h3>
-              <p className="text-sm text-amber-700 whitespace-pre-wrap">{quote.revisionReason}</p>
+              <p className="text-sm text-amber-700 whitespace-pre-wrap break-words">{quote.revisionReason}</p>
             </div>
           )}
 
@@ -935,7 +935,7 @@ export default function QuoteDetailPage({
           {quote.status === "rejected" && quote.rejectionReason && (
             <div className="bg-red-50 rounded-xl border border-red-200 p-5">
               <h3 className="font-medium text-red-800 mb-2">반려 사유</h3>
-              <p className="text-sm text-red-700">{quote.rejectionReason}</p>
+              <p className="text-sm text-red-700 break-words">{quote.rejectionReason}</p>
             </div>
           )}
 
@@ -946,7 +946,7 @@ export default function QuoteDetailPage({
                 <svg className="w-4 h-4 text-amber-500 flex-shrink-0" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M7.5 8.25h9m-9 3H12m-9.75 1.51c0 1.6 1.123 2.994 2.707 3.227 1.087.16 2.185.283 3.293.369V21l4.076-4.076a1.526 1.526 0 0 1 1.037-.443 48.282 48.282 0 0 0 5.68-.494c1.584-.233 2.707-1.626 2.707-3.228V6.741c0-1.602-1.123-2.995-2.707-3.228A48.394 48.394 0 0 0 12 3c-2.392 0-4.744.175-7.043.513C3.373 3.746 2.25 5.14 2.25 6.741v6.018Z" /></svg>
                 <h3 className="font-semibold text-gray-800 text-sm">개발팀 검토 메모</h3>
               </div>
-              <p className="text-sm text-gray-600 whitespace-pre-wrap leading-relaxed">{quote.reviewNote}</p>
+              <p className="text-sm text-gray-600 whitespace-pre-wrap break-words leading-relaxed">{quote.reviewNote}</p>
             </div>
           )}
 
@@ -1008,7 +1008,7 @@ export default function QuoteDetailPage({
                 <Ban className="w-4 h-4" />
                 미진행 처리됨
               </h3>
-              {quote.lostReason && <p className="text-sm text-gray-500">{quote.lostReason}</p>}
+              {quote.lostReason && <p className="text-sm text-gray-500 break-words">{quote.lostReason}</p>}
             </div>
           )}
 
@@ -1041,7 +1041,7 @@ export default function QuoteDetailPage({
                         </button>
                       )}
                     </div>
-                    <p className="text-sm text-gray-700 whitespace-pre-wrap">{c.content}</p>
+                    <p className="text-sm text-gray-700 whitespace-pre-wrap break-words">{c.content}</p>
                   </div>
                 ))}
               </div>
