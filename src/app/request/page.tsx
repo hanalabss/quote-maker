@@ -65,8 +65,9 @@ const KSNET_PRICE = 300000;
 const SELECT_PRINT_PRICE = 150000;
 const DRAFT_KEY = "qm-request-draft";
 
-// 이 모듈 중 하나라도 선택되면 PRINT_SDK 자동 선택
+// 이 모듈 중 하나라도 선택되면 PRINT_SDK·UI_BASIC 자동 선택
 const PRINT_SDK_TRIGGERS = ["CAM_PHOTO", "QR_UPLOAD", "TEXT_INPUT", "SELECT_PRINT"];
+const UI_BASIC_TRIGGERS = PRINT_SDK_TRIGGERS;
 
 interface Attachment {
   fileName: string;
@@ -217,6 +218,11 @@ export default function RequestPage() {
       // 트리거 모듈을 켤 때 PRINT_SDK 자동 추가
       if (!isSelected && PRINT_SDK_TRIGGERS.includes(code) && !next.includes("PRINT_SDK")) {
         next = [...next, "PRINT_SDK"];
+      }
+
+      // 화면 흐름 모듈을 켤 때 UI_BASIC 자동 추가 (견적에서 UI 개발 누락 방지)
+      if (!isSelected && UI_BASIC_TRIGGERS.includes(code) && !next.includes("UI_BASIC")) {
+        next = [...next, "UI_BASIC"];
       }
 
       return { ...prev, selectedModules: next };
