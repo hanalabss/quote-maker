@@ -73,6 +73,7 @@ model Quote {
   confirmedDate    String?    // 행사 시작일 (확정 후)
   confirmedEndDate String?    // 행사 종료일 (확정 후)
   devDeadline      String?    // 개발 마감일
+  devCompletedAt   DateTime?  // 개발 완료(배포) 일시
   lostReason       String?    // 미진행 사유
 
   // 숨김 (요청자가 삭제 시 화면에서만 숨김, DB 유지)

@@ -71,6 +71,7 @@ interface QuoteDetail {
   confirmedDate: string | null;
   confirmedEndDate: string | null;
   devDeadline: string | null;
+  devCompletedAt: string | null;
   lostReason: string | null;
   subtotal: number;
   vat: number;
@@ -92,11 +93,15 @@ interface QuoteCommentType {
 }
 
 // 견적 생애주기 파이프라인 (반려/미진행은 이탈 상태로 별도 배너 표시)
-const PIPELINE: { key: QuoteStatus; label: string }[] = [
+// 개발/행사 단계는 별도 status가 아니라 확정 시 입력한 날짜 + devCompletedAt으로 파생
+type StepKey = "pending" | "reviewing" | "approved" | "confirmed" | "dev" | "event" | "completed";
+const PIPELINE: { key: StepKey; label: string }[] = [
   { key: "pending", label: "대기중" },
   { key: "reviewing", label: "검토중" },
   { key: "approved", label: "승인" },
   { key: "confirmed", label: "확정" },
+  { key: "dev", label: "개발" },
+  { key: "event", label: "행사" },
   { key: "completed", label: "완료" },
 ];
 
@@ -111,8 +116,32 @@ function fmtDate(iso: string | null | undefined, withTime = false) {
   });
 }
 
+// yyyy-mm-dd 문자열 기준 오늘 (로컬)
+function todayStr() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+function currentStepIndex(quote: QuoteDetail): number {
+  switch (quote.status) {
+    case "pending":
+      return 0;
+    case "reviewing":
+      return 1;
+    case "approved":
+      return 2;
+    case "confirmed":
+      // 확정 직후부터 개발 단계, 배포(devCompletedAt) 후에는 행사 단계
+      return quote.devCompletedAt ? 5 : 4;
+    case "completed":
+      return 6;
+    default:
+      return -1; // rejected / lost / draft → 배너 표시
+  }
+}
+
 function StatusStepper({ quote }: { quote: QuoteDetail }) {
-  const idx = PIPELINE.findIndex((p) => p.key === quote.status);
+  const idx = currentStepIndex(quote);
   if (idx === -1) {
     // 이탈/사전 상태: 배너로 표시
     if (quote.status === "rejected") {
@@ -134,7 +163,12 @@ function StatusStepper({ quote }: { quote: QuoteDetail }) {
     return null;
   }
 
-  const subLabel = (key: QuoteStatus): string => {
+  const today = todayStr();
+  // 행사 종료일이 지났는데 완료 처리가 안 된 상태 → 리마인드 강조
+  const eventEndedAwaiting =
+    quote.status === "confirmed" && !!quote.confirmedEndDate && quote.confirmedEndDate < today;
+
+  const subLabel = (key: StepKey): string => {
     switch (key) {
       case "pending":
         return fmtDate(quote.createdAt, true);
@@ -144,6 +178,21 @@ function StatusStepper({ quote }: { quote: QuoteDetail }) {
         return "";
       case "confirmed":
         return quote.confirmedAt ? fmtDate(quote.confirmedAt) : "행사 확정 시";
+      case "dev":
+        if (quote.devCompletedAt) return `배포 ${fmtDate(quote.devCompletedAt)}`;
+        return quote.devDeadline ? `납기 ${fmtDate(quote.devDeadline)}` : "확정 후 착수";
+      case "event": {
+        if (eventEndedAwaiting) return "종료 · 완료 처리 대기";
+        const range = quote.confirmedDate
+          ? `${fmtDate(quote.confirmedDate)}~${fmtDate(quote.confirmedEndDate)}`
+          : "";
+        const running =
+          quote.status === "confirmed" &&
+          !!quote.confirmedDate &&
+          quote.confirmedDate <= today &&
+          (!quote.confirmedEndDate || today <= quote.confirmedEndDate);
+        return running ? `진행 중 ${range}` : range;
+      }
       case "completed":
         return quote.confirmedEndDate ? `행사 종료 ${fmtDate(quote.confirmedEndDate)}` : "행사 종료 후";
       default:
@@ -177,7 +226,8 @@ function StatusStepper({ quote }: { quote: QuoteDetail }) {
                 aria-hidden="true"
               />
             )}
-            <span className="pr-2">
+            {/* 라벨이 연결선 경로 위에 있으므로 z-10 + 배경으로 선을 가림 (선은 라벨 끝~다음 원 사이에만 보임) */}
+            <span className="relative z-10 bg-white pr-2">
               <span
                 className={`block text-[13px] leading-[26px] whitespace-nowrap ${
                   state === "todo" ? "text-gray-400" : "font-semibold"
@@ -186,7 +236,15 @@ function StatusStepper({ quote }: { quote: QuoteDetail }) {
                 {p.label}
                 {state === "now" && <span className="sr-only"> (현재 상태)</span>}
               </span>
-              <span className={`block text-[11px] leading-tight whitespace-nowrap ${state === "now" ? "text-blue-600" : "text-gray-400"}`}>
+              <span
+                className={`block text-[11px] leading-tight whitespace-nowrap ${
+                  p.key === "event" && eventEndedAwaiting
+                    ? "text-amber-600 font-medium"
+                    : state === "now"
+                    ? "text-blue-600"
+                    : "text-gray-400"
+                }`}
+              >
                 {subLabel(p.key)}
               </span>
             </span>
@@ -324,6 +382,20 @@ export default function QuoteDetailPage({
     setShowRejectModal(false);
     setShowConfirmModal(false);
     setShowLostModal(false);
+  }
+
+  // 개발 완료(배포) 토글 — status 전환이 아니라 devCompletedAt 기록 (dev 전용)
+  async function updateDevCompleted(done: boolean) {
+    setSaving(true);
+    const res = await fetch(`/api/quotes/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ devCompleted: done }),
+    });
+    const data = await res.json();
+    if (res.ok) setQuote(data);
+    else alert(data.error || "개발 완료 처리에 실패했습니다");
+    setSaving(false);
   }
 
   function openBasicEditModal() {
@@ -1197,6 +1269,26 @@ export default function QuoteDetailPage({
                   <RotateCcw className="w-4 h-4" />
                   <span className="hidden sm:inline">승인으로 되돌리기</span>
                 </button>
+                {isDev && !quote.devCompletedAt && (
+                  <button
+                    onClick={() => updateDevCompleted(true)}
+                    disabled={saving}
+                    className="flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors"
+                  >
+                    {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle className="w-4 h-4" />}
+                    개발 완료
+                  </button>
+                )}
+                {isDev && quote.devCompletedAt && (
+                  <button
+                    onClick={() => updateDevCompleted(false)}
+                    disabled={saving}
+                    className="flex items-center gap-1.5 px-3 py-2.5 text-sm text-gray-500 rounded-lg hover:bg-gray-50 disabled:opacity-50 transition-colors"
+                  >
+                    <RotateCcw className="w-4 h-4" />
+                    <span className="hidden sm:inline">개발 완료 취소</span>
+                  </button>
+                )}
                 <button
                   onClick={() => updateStatus("completed")}
                   disabled={saving}
