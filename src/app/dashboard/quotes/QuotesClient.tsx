@@ -2,10 +2,11 @@
 
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Search, ChevronRight, AlertCircle, Clock } from "lucide-react";
+import { Search, ChevronRight, AlertCircle, Clock, CheckCheck } from "lucide-react";
 import { formatKRW } from "@/lib/pricing";
 import type { QuoteStatus, QuoteType } from "@/types";
 import { STATUS_LABELS, STATUS_COLORS, TYPE_LABELS, TYPE_COLORS } from "@/types";
+import { getLifecycleBadge, todayStr, type LifecycleBadge } from "@/lib/lifecycle";
 
 interface QuoteListItem {
   id: string;
@@ -18,22 +19,32 @@ interface QuoteListItem {
   createdAt: string;
   createdBy?: { name: string; team: string | null } | null;
   devDeadline?: string | null;
+  devCompletedAt?: string | null;
+  confirmedDate?: string | null;
   confirmedEndDate?: string | null;
   eventEndDate?: string | null;
 }
 
-function getDday(deadline: string) {
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const d = new Date(deadline + "T00:00:00");
-  return Math.ceil((d.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
-}
-
-function DdayBadge({ deadline }: { deadline: string }) {
-  const diff = getDday(deadline);
-  if (diff < 0) return <span className="ml-1.5 text-xs text-red-600 font-bold">{Math.abs(diff)}일 초과</span>;
-  if (diff === 0) return <span className="ml-1.5 text-xs text-red-600 font-bold">오늘</span>;
-  return <span className={`ml-1.5 text-xs font-bold ${diff <= 3 ? "text-red-600" : "text-amber-600"}`}>D-{diff}</span>;
+// 생애주기 배지 — "초과"류 경고는 아직 해야 할 일이 늦었을 때만 (판정: lib/lifecycle)
+function LifecycleBadgeView({ badge }: { badge: LifecycleBadge }) {
+  if (!badge) return null;
+  switch (badge.kind) {
+    case "overdue":
+      return <span className="ml-1.5 text-xs text-red-600 font-bold">{badge.days}일 초과</span>;
+    case "dday":
+      if (badge.days === 0) return <span className="ml-1.5 text-xs text-red-600 font-bold">오늘</span>;
+      return (
+        <span className={`ml-1.5 text-xs font-bold ${badge.days <= 3 ? "text-red-600" : "text-amber-600"}`}>
+          D-{badge.days}
+        </span>
+      );
+    case "deploy-missing":
+      return <span className="ml-1.5 text-xs text-red-600 font-bold">배포 미확인</span>;
+    case "deployed":
+      return <span className="ml-1.5 text-xs text-emerald-600 font-medium">배포 완료</span>;
+    case "awaiting-complete":
+      return <span className="ml-1.5 text-xs text-amber-600 font-medium">완료 처리 대기</span>;
+  }
 }
 
 // 파이프라인 진행 단계 (반려/미진행/임시저장은 파이프라인 밖)
@@ -108,15 +119,30 @@ export function QuotesClient({
     {} as Record<string, number>
   );
 
-  // 오늘 할 일: 개발 마감 임박(확정 & D-3 이내/초과) + 검토 대기
+  // 오늘 할 일: 개발 마감 임박(미배포 & D-3 이내/초과/배포 미확인) + 완료 처리 대기 + 검토 대기
+  const today = todayStr();
+  const badges = useMemo(
+    () => new Map(quotes.map((q) => [q.id, getLifecycleBadge(q, today)])),
+    [quotes, today]
+  );
   const urgent = useMemo(() => {
-    const list = quotes
-      .filter((q) => q.status === "confirmed" && q.devDeadline)
-      .map((q) => ({ q, dday: getDday(q.devDeadline!) }))
-      .filter((x) => x.dday <= 3)
-      .sort((a, b) => a.dday - b.dday);
-    return list;
-  }, [quotes]);
+    // 정렬 우선순위: 배포 미확인 → 초과 큰 순 → D-day 작은 순
+    const rank = (b: LifecycleBadge) =>
+      b?.kind === "deploy-missing" ? -1000 : b?.kind === "overdue" ? -b.days : b?.kind === "dday" ? b.days : 9999;
+    return quotes
+      .map((q) => ({ q, badge: badges.get(q.id) ?? null }))
+      .filter(
+        ({ badge }) =>
+          badge?.kind === "deploy-missing" ||
+          badge?.kind === "overdue" ||
+          (badge?.kind === "dday" && badge.days <= 3)
+      )
+      .sort((a, b) => rank(a.badge) - rank(b.badge));
+  }, [quotes, badges]);
+  const awaitingComplete = useMemo(
+    () => quotes.filter((q) => badges.get(q.id)?.kind === "awaiting-complete"),
+    [quotes, badges]
+  );
 
   const oldestPendingDays = useMemo(() => {
     const pendings = quotes.filter((q) => q.status === "pending");
@@ -169,7 +195,7 @@ export function QuotesClient({
       </div>
 
       {/* 오늘 할 일 스트립 */}
-      {(urgent.length > 0 || (statusCounts["pending"] || 0) > 0) && (
+      {(urgent.length > 0 || awaitingComplete.length > 0 || (statusCounts["pending"] || 0) > 0) && (
         <div className="flex flex-wrap gap-2 mb-4">
           {urgent.length > 0 && (
             <button
@@ -180,12 +206,26 @@ export function QuotesClient({
               개발 마감 임박 {urgent.length}건
               <span className="hidden sm:inline text-red-600">
                 — {urgent[0].q.eventName}
-                {urgent[0].dday < 0
-                  ? ` ${Math.abs(urgent[0].dday)}일 초과`
-                  : urgent[0].dday === 0
+                {urgent[0].badge?.kind === "deploy-missing"
+                  ? " 배포 미확인"
+                  : urgent[0].badge?.kind === "overdue"
+                  ? ` ${urgent[0].badge.days}일 초과`
+                  : urgent[0].badge?.kind === "dday" && urgent[0].badge.days === 0
                   ? " 오늘"
-                  : ` D-${urgent[0].dday}`}
+                  : urgent[0].badge?.kind === "dday"
+                  ? ` D-${urgent[0].badge.days}`
+                  : ""}
               </span>
+            </button>
+          )}
+          {awaitingComplete.length > 0 && (
+            <button
+              onClick={() => setFilter("confirmed")}
+              className="inline-flex items-center gap-1.5 text-xs sm:text-sm font-medium px-3 py-1.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200 hover:bg-amber-100 transition-colors"
+            >
+              <CheckCheck className="w-3.5 h-3.5" />
+              완료 처리 대기 {awaitingComplete.length}건
+              <span className="hidden sm:inline">— {awaitingComplete[0].eventName}</span>
             </button>
           )}
           {(statusCounts["pending"] || 0) > 0 && (
@@ -342,7 +382,7 @@ export function QuotesClient({
                         }`}>
                           {STATUS_LABELS[q.status as QuoteStatus]}
                         </span>
-                        {q.status === "confirmed" && q.devDeadline && <DdayBadge deadline={q.devDeadline} />}
+                        <LifecycleBadgeView badge={badges.get(q.id) ?? null} />
                         <ProgressDots status={q.status} />
                       </td>
                       <td className="px-4 py-3 text-sm text-gray-500 text-center hidden md:table-cell">
@@ -374,7 +414,7 @@ export function QuotesClient({
                     }`}>
                       {STATUS_LABELS[q.status as QuoteStatus]}
                     </span>
-                    {q.status === "confirmed" && q.devDeadline && <DdayBadge deadline={q.devDeadline} />}
+                    <LifecycleBadgeView badge={badges.get(q.id) ?? null} />
                   </span>
                 </div>
                 <h3 className="text-[15px] font-semibold mb-1 truncate">{q.eventName}</h3>
