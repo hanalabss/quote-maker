@@ -30,6 +30,7 @@ import { formatKRW } from "@/lib/pricing";
 import type { QuoteStatus, QuoteType } from "@/types";
 import { STATUS_LABELS, STATUS_COLORS, TYPE_LABELS, TYPE_COLORS } from "@/types";
 import { normalizeItemName, type BaselineMap } from "@/lib/baseline";
+import { getLifecycleBadge, todayStr } from "@/lib/lifecycle";
 
 interface QuoteItem {
   id: string;
@@ -87,8 +88,10 @@ interface QuoteDetail {
 
 interface QuoteCommentType {
   id: string;
+  userId: string;
   content: string;
   createdAt: string;
+  updatedAt: string;
   user: { name: string; role: string; team: string | null };
 }
 
@@ -114,12 +117,6 @@ function fmtDate(iso: string | null | undefined, withTime = false) {
     day: "numeric",
     ...(withTime ? { hour: "2-digit", minute: "2-digit" } : {}),
   });
-}
-
-// yyyy-mm-dd 문자열 기준 오늘 (로컬)
-function todayStr() {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
 function currentStepIndex(quote: QuoteDetail): number {
@@ -279,6 +276,8 @@ export default function QuoteDetailPage({
   const [comments, setComments] = useState<QuoteCommentType[]>([]);
   const [newComment, setNewComment] = useState("");
   const [commentSaving, setCommentSaving] = useState(false);
+  const [editingCommentId, setEditingCommentId] = useState<string | null>(null);
+  const [editingCommentContent, setEditingCommentContent] = useState("");
   // 수정 요청 (사업팀, approved → reviewing)
   const [showRevisionModal, setShowRevisionModal] = useState(false);
   const [revisionReasonInput, setRevisionReasonInput] = useState("");
@@ -332,6 +331,27 @@ export default function QuoteDetailPage({
     } catch (e) {
       console.error("댓글 삭제 오류:", e);
     }
+  }
+
+  async function updateComment() {
+    if (!editingCommentId || !editingCommentContent.trim()) return;
+    setCommentSaving(true);
+    try {
+      const res = await fetch(`/api/quotes/${id}/comments/${editingCommentId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ content: editingCommentContent }),
+      });
+      if (res.ok) {
+        const updated = await res.json();
+        setComments((prev) => prev.map((c) => (c.id === updated.id ? updated : c)));
+        setEditingCommentId(null);
+        setEditingCommentContent("");
+      }
+    } catch (e) {
+      console.error("댓글 수정 오류:", e);
+    }
+    setCommentSaving(false);
   }
 
   async function addComment() {
@@ -1042,19 +1062,39 @@ export default function QuoteDetailPage({
                 {quote.status === "confirmed" && (
                   <div className="flex justify-between">
                     <dt className="text-emerald-600">개발 마감일</dt>
-                    <dd className="font-bold text-red-600 flex items-center gap-1.5">
+                    <dd
+                      className={`flex items-center gap-1.5 ${
+                        quote.devCompletedAt ? "text-gray-600" : "font-bold text-red-600"
+                      }`}
+                    >
                       <Clock className="w-3.5 h-3.5" />
                       {quote.devDeadline}
-                      {quote.devDeadline && (() => {
-                        const today = new Date();
-                        today.setHours(0, 0, 0, 0);
-                        const deadline = new Date(quote.devDeadline + "T00:00:00");
-                        const diff = Math.ceil((deadline.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
-                        if (diff < 0) return <span className="text-xs bg-red-100 text-red-700 px-1.5 py-0.5 rounded">{Math.abs(diff)}일 초과</span>;
-                        if (diff === 0) return <span className="text-xs bg-red-100 text-red-700 px-1.5 py-0.5 rounded">오늘 마감</span>;
-                        return <span className="text-xs bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded">D-{diff}</span>;
+                      {(() => {
+                        const badge = getLifecycleBadge(quote, todayStr());
+                        switch (badge?.kind) {
+                          case "overdue":
+                            return <span className="text-xs bg-red-100 text-red-700 px-1.5 py-0.5 rounded">{badge.days}일 초과</span>;
+                          case "dday":
+                            return badge.days === 0
+                              ? <span className="text-xs bg-red-100 text-red-700 px-1.5 py-0.5 rounded">오늘 마감</span>
+                              : <span className="text-xs bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded">D-{badge.days}</span>;
+                          case "deploy-missing":
+                            return <span className="text-xs bg-red-100 text-red-700 px-1.5 py-0.5 rounded">배포 미확인</span>;
+                          case "deployed":
+                            return <span className="text-xs bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded">배포 완료</span>;
+                          case "awaiting-complete":
+                            return <span className="text-xs bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded">완료 처리 대기</span>;
+                          default:
+                            return null;
+                        }
                       })()}
                     </dd>
+                  </div>
+                )}
+                {quote.devCompletedAt && (
+                  <div className="flex justify-between">
+                    <dt className={quote.status === "completed" ? "text-slate-600" : "text-emerald-600"}>개발 완료(배포)</dt>
+                    <dd className="text-gray-600">{new Date(quote.devCompletedAt).toLocaleDateString("ko-KR")}</dd>
                   </div>
                 )}
                 {quote.status === "completed" && quote.devDeadline && (
@@ -1102,18 +1142,71 @@ export default function QuoteDetailPage({
                       </span>
                       <span className="text-xs text-gray-400">
                         {new Date(c.createdAt).toLocaleString("ko-KR", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
+                        {new Date(c.updatedAt).getTime() - new Date(c.createdAt).getTime() > 2000 && " (수정됨)"}
                       </span>
-                      {(isDev || c.user.name === user?.name) && (
+                      {c.userId === user?.id && editingCommentId !== c.id && (
+                        <button
+                          onClick={() => {
+                            setEditingCommentId(c.id);
+                            setEditingCommentContent(c.content);
+                          }}
+                          className="ml-auto text-gray-300 hover:text-blue-500 transition-colors"
+                          title="수정"
+                        >
+                          <Edit3 className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                      {(isDev || c.userId === user?.id) && (
                         <button
                           onClick={() => deleteComment(c.id)}
-                          className="ml-auto text-gray-300 hover:text-red-500 transition-colors"
+                          className={`${c.userId === user?.id && editingCommentId !== c.id ? "" : "ml-auto "}text-gray-300 hover:text-red-500 transition-colors`}
                           title="삭제"
                         >
                           <Trash2 className="w-3.5 h-3.5" />
                         </button>
                       )}
                     </div>
-                    <p className="text-sm text-gray-700 whitespace-pre-wrap break-words">{c.content}</p>
+                    {editingCommentId === c.id ? (
+                      <div>
+                        <textarea
+                          value={editingCommentContent}
+                          onChange={(e) => setEditingCommentContent(e.target.value)}
+                          rows={3}
+                          autoFocus
+                          className="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none resize-none bg-white"
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
+                              e.preventDefault();
+                              updateComment();
+                            }
+                            if (e.key === "Escape") {
+                              setEditingCommentId(null);
+                              setEditingCommentContent("");
+                            }
+                          }}
+                        />
+                        <div className="flex justify-end gap-2 mt-1">
+                          <button
+                            onClick={() => {
+                              setEditingCommentId(null);
+                              setEditingCommentContent("");
+                            }}
+                            className="px-2.5 py-1 text-xs text-gray-500 border rounded-lg hover:bg-gray-100 transition-colors"
+                          >
+                            취소
+                          </button>
+                          <button
+                            onClick={updateComment}
+                            disabled={!editingCommentContent.trim() || commentSaving}
+                            className="px-2.5 py-1 text-xs bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors"
+                          >
+                            {commentSaving ? "저장 중..." : "저장"}
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <p className="text-sm text-gray-700 whitespace-pre-wrap break-words">{c.content}</p>
+                    )}
                   </div>
                 ))}
               </div>
