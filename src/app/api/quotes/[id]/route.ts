@@ -228,6 +228,7 @@ export async function PATCH(
       updateData.confirmedDate = null;
       updateData.confirmedEndDate = null;
       updateData.devDeadline = null;
+      updateData.devCompletedAt = null;
       updateData.lostReason = null;
     }
 
@@ -281,6 +282,29 @@ export async function PATCH(
       }).catch((err) => console.error("[Email] 확정 알림 실패:", err));
     }
 
+    return NextResponse.json(updated);
+  }
+
+  // 개발 완료(배포) 토글 — 확정 상태에서 dev만 (상태 enum 변경 없이 생애주기 단계만 기록)
+  if (typeof body.devCompleted === "boolean") {
+    if (user.role !== "dev") {
+      return NextResponse.json({ error: "권한이 없습니다" }, { status: 403 });
+    }
+    if (quote.status !== "confirmed") {
+      return NextResponse.json(
+        { error: "확정 상태의 견적만 개발 완료 처리할 수 있습니다" },
+        { status: 400 }
+      );
+    }
+    const updated = await prisma.quote.update({
+      where: { id },
+      data: { devCompletedAt: body.devCompleted ? new Date() : null },
+      include: {
+        items: { orderBy: { sortOrder: "asc" } },
+        createdBy: { select: { name: true, team: true, email: true } },
+        reviewedBy: { select: { name: true } },
+      },
+    });
     return NextResponse.json(updated);
   }
 
