@@ -256,6 +256,17 @@ export function QuotesClient({
       </div>
       <div className="flex flex-wrap gap-2 mb-5">
         <button
+          onClick={() => setFilter(filter === "on_hold" ? "" : "on_hold")}
+          aria-pressed={filter === "on_hold"}
+          className={`inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-full border transition-colors ${
+            filter === "on_hold"
+              ? "border-sky-400 bg-sky-50 text-sky-700"
+              : "border-dashed border-gray-300 bg-white text-gray-500 hover:bg-gray-50"
+          }`}
+        >
+          보류 <b className="font-semibold text-gray-700 tabular-nums">{statusCounts["on_hold"] || 0}</b>
+        </button>
+        <button
           onClick={() => setFilter(filter === "rejected" ? "" : "rejected")}
           aria-pressed={filter === "rejected"}
           className={`inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-full border transition-colors ${

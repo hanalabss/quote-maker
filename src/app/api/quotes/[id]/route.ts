@@ -135,8 +135,10 @@ export async function PATCH(
   // 상태 변경
   if (body.status) {
     // 사업팀 전용 전이: approved ↔ confirmed / lost / completed + 수정 요청(approved → reviewing)
+    // 보류(on_hold): 승인 후 장기 대기 — 미진행과 달리 언제든 재개/확정 가능
     const salesTransitions: Record<string, string[]> = {
-      approved: ["confirmed", "lost", "reviewing"],
+      approved: ["confirmed", "lost", "reviewing", "on_hold"],
+      on_hold: ["approved", "confirmed", "lost", "on_hold"], // on_hold→on_hold = 보류 사유 갱신
       confirmed: ["approved", "completed"],
       completed: ["confirmed"],
       lost: ["approved"],
@@ -232,6 +234,13 @@ export async function PATCH(
       updateData.lostReason = body.lostReason || null;
     }
 
+    // 보류 처리 / 해제
+    if (body.status === "on_hold") {
+      updateData.holdReason = body.holdReason || null;
+    } else if (quote.status === "on_hold") {
+      updateData.holdReason = null;
+    }
+
     // 승인으로 복원 (confirmed/lost → approved)
     if (body.status === "approved" && (quote.status === "confirmed" || quote.status === "lost")) {
       updateData.confirmedAt = null;
@@ -252,7 +261,8 @@ export async function PATCH(
     });
 
     // 승인 시 → 요청자 + 개발팀에게 이메일
-    if (body.status === "approved") {
+    // 실제 승인 이벤트(reviewing→approved)에만 발송 — 보류 재개/미진행·확정 복원은 재발송 안 함
+    if (body.status === "approved" && quote.status === "reviewing") {
       const quoteUrl = `${process.env.NEXT_PUBLIC_APP_URL}/dashboard/quotes/${id}`;
       await sendApprovalNotification({
         quoteNumber: quote.quoteNumber,
@@ -346,8 +356,9 @@ export async function PATCH(
   }
 
   // 기본정보 수정 (가격 무관 필드 — 사업팀 본인 견적 또는 dev)
+  // 보류(on_hold)도 허용: 보류 사유가 대개 일정 변경이라 행사일/납기 갱신이 필요
   if (body.basicInfo && typeof body.basicInfo === "object") {
-    const editableStates = ["pending", "reviewing", "approved"];
+    const editableStates = ["pending", "reviewing", "approved", "on_hold"];
     if (!editableStates.includes(quote.status)) {
       return NextResponse.json(
         { error: "확정/완료된 견적은 기본정보를 수정할 수 없습니다" },
@@ -402,7 +413,7 @@ export async function PATCH(
       return NextResponse.json({ error: "권한이 없습니다" }, { status: 403 });
     }
     // 확정/완료된 견적은 매출 인식이 끝났으므로 항목(금액) 무흔적 수정 금지 (basicInfo와 동일 기준)
-    if (!["pending", "reviewing", "approved"].includes(quote.status)) {
+    if (!["pending", "reviewing", "approved", "on_hold"].includes(quote.status)) {
       return NextResponse.json(
         { error: "확정/완료된 견적은 항목을 수정할 수 없습니다" },
         { status: 400 }

@@ -36,6 +36,8 @@ interface ReportData {
     outstandingCount: number;
     awaitingTotal: number;
     awaitingCount: number;
+    holdTotal: number;
+    holdCount: number;
   };
   monthly: { month: string; total: number; subtotal: number; count: number; external: number }[];
   statusSummary: { status: string; count: number; total: number; externalCount: number }[];
@@ -49,6 +51,7 @@ const STATUS_LABELS: Record<string, string> = {
   pending: "검토 대기",
   reviewing: "검토중",
   approved: "승인 (확정 대기)",
+  on_hold: "보류",
   confirmed: "행사 확정",
   completed: "행사 완료",
   rejected: "반려",
@@ -157,7 +160,11 @@ export default function ReportsPage() {
           <div className="text-lg sm:text-xl font-bold tabular-nums mt-1">
             {formatKRW(data.totals.awaitingTotal)}원
           </div>
-          <div className="text-[11px] text-gray-400">{data.totals.awaitingCount}건</div>
+          <div className="text-[11px] text-gray-400 tabular-nums">
+            {data.totals.awaitingCount}건
+            {data.totals.holdCount > 0 &&
+              ` · 보류 ${data.totals.holdCount}건 (${formatKRW(data.totals.holdTotal)}원)`}
+          </div>
         </div>
         <div className="bg-white rounded-xl border p-4">
           <div className="text-xs text-gray-500 flex items-center gap-1">
