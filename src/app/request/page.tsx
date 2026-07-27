@@ -176,7 +176,10 @@ export default function RequestPage() {
   useEffect(() => {
     fetch("/api/modules")
       .then((r) => r.json())
-      .then(setModules);
+      .then((data: Module[]) =>
+        // 외주 전용 모듈은 사업팀 요청 폼에서 제외
+        setModules(data.filter((m) => m.category !== "external"))
+      );
 
     // 로그인 사용자 정보 가져오기 → 요청자명 자동 채우기
     fetch("/api/auth/me")
