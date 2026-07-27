@@ -75,6 +75,7 @@ model Quote {
   devDeadline      String?    // 개발 마감일
   devCompletedAt   DateTime?  // 개발 완료(배포) 일시
   lostReason       String?    // 미진행 사유
+  holdReason       String?    // 보류 사유 (승인 후 장기 대기 — 내년 진행, 예산 대기 등)
 
   // 입금 추적 (지불조건: 계약금 40%, 잔금 60%)
   depositPaidAt    String?    // 계약금 입금일 (YYYY-MM-DD)

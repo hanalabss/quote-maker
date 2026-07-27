@@ -1,4 +1,4 @@
-export type QuoteStatus = "draft" | "pending" | "reviewing" | "approved" | "rejected" | "confirmed" | "completed" | "lost";
+export type QuoteStatus = "draft" | "pending" | "reviewing" | "approved" | "on_hold" | "rejected" | "confirmed" | "completed" | "lost";
 export type QuoteType = "sale" | "rental" | "re_event";
 export type UserRole = "sales" | "dev" | "dev_staff";
 
@@ -54,6 +54,7 @@ export const STATUS_LABELS: Record<QuoteStatus, string> = {
   pending: "대기중",
   reviewing: "검토중",
   approved: "승인",
+  on_hold: "보류",
   rejected: "반려",
   confirmed: "확정",
   completed: "완료",
@@ -65,6 +66,7 @@ export const STATUS_COLORS: Record<QuoteStatus, string> = {
   pending: "bg-yellow-100 text-yellow-700",
   reviewing: "bg-blue-100 text-blue-700",
   approved: "bg-green-100 text-green-700",
+  on_hold: "bg-sky-100 text-sky-700",
   rejected: "bg-red-100 text-red-700",
   confirmed: "bg-emerald-100 text-emerald-700",
   completed: "bg-slate-100 text-slate-700",

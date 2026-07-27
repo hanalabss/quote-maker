@@ -25,6 +25,8 @@ import {
   CheckCheck,
   Ban,
   Clock,
+  PauseCircle,
+  PlayCircle,
 } from "lucide-react";
 import { formatKRW } from "@/lib/pricing";
 import type { QuoteStatus, QuoteType } from "@/types";
@@ -76,6 +78,7 @@ interface QuoteDetail {
   devCompletedAt: string | null;
   depositPaidAt: string | null;
   balancePaidAt: string | null;
+  holdReason: string | null;
   lostReason: string | null;
   subtotal: number;
   vat: number;
@@ -157,6 +160,14 @@ function StatusStepper({ quote }: { quote: QuoteDetail }) {
         <div className="bg-gray-100 border border-gray-200 rounded-xl px-5 py-3 mb-6 flex items-center gap-2 text-sm text-gray-600 font-medium">
           <Ban className="w-4 h-4 shrink-0" />
           미진행 처리된 견적입니다.
+        </div>
+      );
+    }
+    if (quote.status === "on_hold") {
+      return (
+        <div className="bg-sky-50 border border-sky-200 rounded-xl px-5 py-3 mb-6 flex items-center gap-2 text-sm text-sky-700 font-medium">
+          <PauseCircle className="w-4 h-4 shrink-0" />
+          보류 중인 견적입니다. 재개하거나 바로 확정할 수 있습니다.
         </div>
       );
     }
@@ -272,6 +283,8 @@ export default function QuoteDetailPage({
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [showLostModal, setShowLostModal] = useState(false);
+  const [showHoldModal, setShowHoldModal] = useState(false);
+  const [holdReasonInput, setHoldReasonInput] = useState("");
   const [confirmedDate, setConfirmedDate] = useState("");
   const [confirmedEndDate, setConfirmedEndDate] = useState("");
   const [devDeadline, setDevDeadline] = useState("");
@@ -542,8 +555,8 @@ export default function QuoteDetailPage({
     if (!quote) return;
     setConfirmedDate(quote.eventDate || "");
     setConfirmedEndDate(quote.eventEndDate || quote.eventDate || "");
-    // devDeadline 기본값: 요청 시 입력한 납기일 우선, 없으면 행사일 기준 자동 계산
-    if (quote.deadline) {
+    // devDeadline 기본값: 요청 시 입력한 납기일 우선(이미 지난 날짜면 제외 — 장기 보류 후 확정 케이스), 없으면 행사일 기준 자동 계산
+    if (quote.deadline && quote.deadline >= todayStr()) {
       setDevDeadline(quote.deadline);
     } else {
       const eventStart = quote.eventDate ? new Date(quote.eventDate + "T00:00:00") : null;
@@ -590,7 +603,7 @@ export default function QuoteDetailPage({
   const showActionBar =
     !editing &&
     ((isDev && (quote.status === "pending" || quote.status === "reviewing")) ||
-      (canAct && ["approved", "confirmed", "completed", "lost"].includes(quote.status)));
+      (canAct && ["approved", "on_hold", "confirmed", "completed", "lost"].includes(quote.status)));
 
   return (
     <div className={showActionBar ? "pb-20" : ""}>
@@ -618,7 +631,7 @@ export default function QuoteDetailPage({
               >
                 {TYPE_LABELS[quote.type as QuoteType] || quote.type}
               </span>
-              {(quote.status === "rejected" || quote.status === "lost" || quote.status === "draft") && (
+              {(quote.status === "rejected" || quote.status === "lost" || quote.status === "draft" || quote.status === "on_hold") && (
                 <span
                   className={`text-xs px-2.5 py-0.5 rounded-full shrink-0 font-medium ${
                     STATUS_COLORS[quote.status]
@@ -672,7 +685,7 @@ export default function QuoteDetailPage({
           <div className="bg-white rounded-xl border p-5">
             <div className="flex items-center justify-between mb-3">
               <h3 className="font-medium">행사 정보</h3>
-              {["pending", "reviewing", "approved"].includes(quote.status) &&
+              {["pending", "reviewing", "approved", "on_hold"].includes(quote.status) &&
                 (isDev || quote.createdById === user?.id) && (
                   <button
                     onClick={openBasicEditModal}
@@ -1191,6 +1204,28 @@ export default function QuoteDetailPage({
             </div>
           )}
 
+          {/* 보류 사유 표시 */}
+          {quote.status === "on_hold" && (
+            <div className="bg-sky-50 rounded-xl border border-sky-200 p-5">
+              <div className="flex items-center justify-between mb-2">
+                <h3 className="font-medium text-sky-700 flex items-center gap-2">
+                  <PauseCircle className="w-4 h-4" />
+                  보류 중
+                </h3>
+                {canAct && (
+                  <button
+                    onClick={() => { setHoldReasonInput(quote.holdReason || ""); setShowHoldModal(true); }}
+                    className="flex items-center gap-1 text-xs text-sky-600 hover:text-sky-800"
+                  >
+                    <Edit3 className="w-3.5 h-3.5" />
+                    사유 수정
+                  </button>
+                )}
+              </div>
+              {quote.holdReason && <p className="text-sm text-sky-800/80 break-words">{quote.holdReason}</p>}
+            </div>
+          )}
+
           {/* 미진행 사유 표시 */}
           {quote.status === "lost" && (
             <div className="bg-gray-50 rounded-xl border border-gray-200 p-5">
@@ -1412,12 +1447,49 @@ export default function QuoteDetailPage({
                   </button>
                 )}
                 <button
+                  onClick={() => { setHoldReasonInput(""); setShowHoldModal(true); }}
+                  disabled={saving}
+                  className="flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium text-sky-700 border border-sky-200 bg-white rounded-lg hover:bg-sky-50 disabled:opacity-50 transition-colors"
+                >
+                  <PauseCircle className="w-4 h-4" />
+                  보류
+                </button>
+                <button
                   onClick={() => setShowLostModal(true)}
                   disabled={saving}
                   className="flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium text-gray-600 border rounded-lg bg-white hover:bg-gray-50 disabled:opacity-50 transition-colors"
                 >
                   <Ban className="w-4 h-4" />
                   미진행
+                </button>
+                <button
+                  onClick={openConfirmModal}
+                  disabled={saving}
+                  className="flex items-center gap-1.5 px-5 py-2.5 text-sm font-medium bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 disabled:opacity-50 transition-colors"
+                >
+                  <CalendarCheck className="w-4 h-4" />
+                  행사 확정
+                </button>
+              </>
+            )}
+
+            {quote.status === "on_hold" && canAct && (
+              <>
+                <button
+                  onClick={() => setShowLostModal(true)}
+                  disabled={saving}
+                  className="flex items-center gap-1.5 px-3 py-2.5 text-sm text-gray-500 rounded-lg hover:bg-gray-50 disabled:opacity-50 transition-colors"
+                >
+                  <Ban className="w-4 h-4" />
+                  미진행
+                </button>
+                <button
+                  onClick={() => updateStatus("approved")}
+                  disabled={saving}
+                  className="flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium text-sky-700 border border-sky-200 bg-white rounded-lg hover:bg-sky-50 disabled:opacity-50 transition-colors"
+                >
+                  <PlayCircle className="w-4 h-4" />
+                  재개 (확정 대기로)
                 </button>
                 <button
                   onClick={openConfirmModal}
@@ -1641,6 +1713,44 @@ export default function QuoteDetailPage({
                 className="px-4 py-2 text-sm bg-gray-600 text-white rounded-lg hover:bg-gray-700 disabled:opacity-50"
               >
                 미진행 확정
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 보류 모달 */}
+      {showHoldModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={() => setShowHoldModal(false)} onKeyDown={(e) => { if (e.key === "Escape") setShowHoldModal(false); }}>
+          <div className="bg-white rounded-2xl p-6 max-w-md w-full" role="dialog" aria-modal="true" aria-labelledby="hold-title" onClick={(e) => e.stopPropagation()}>
+            <h3 id="hold-title" className="text-lg font-semibold mb-2">보류 처리</h3>
+            <p className="text-sm text-gray-500 mb-4">
+              당장 진행되지 않지만 나중에 확정될 수 있는 견적입니다. 확정 대기 파이프라인에서 분리됩니다.
+            </p>
+            <textarea
+              value={holdReasonInput}
+              onChange={(e) => setHoldReasonInput(e.target.value)}
+              rows={3}
+              autoFocus
+              placeholder="보류 사유 (예: 내년 진행, 고객 예산 확정 대기)"
+              className="w-full px-4 py-2.5 border rounded-lg text-sm focus:ring-2 focus:ring-sky-500 outline-none resize-none mb-4"
+            />
+            <div className="flex gap-2 justify-end">
+              <button
+                onClick={() => setShowHoldModal(false)}
+                className="px-4 py-2 text-sm border rounded-lg hover:bg-gray-50"
+              >
+                취소
+              </button>
+              <button
+                onClick={async () => {
+                  await updateStatus("on_hold", { holdReason: holdReasonInput });
+                  setShowHoldModal(false);
+                }}
+                disabled={saving}
+                className="px-4 py-2 text-sm bg-sky-600 text-white rounded-lg hover:bg-sky-700 disabled:opacity-50"
+              >
+                보류 처리
               </button>
             </div>
           </div>

@@ -106,6 +106,8 @@ export async function GET() {
       outstandingCount: outstanding.length,
       awaitingTotal: quotes.filter((q) => q.status === "approved").reduce((s, q) => s + q.totalAmount, 0),
       awaitingCount: quotes.filter((q) => q.status === "approved").length,
+      holdTotal: quotes.filter((q) => q.status === "on_hold").reduce((s, q) => s + q.totalAmount, 0),
+      holdCount: quotes.filter((q) => q.status === "on_hold").length,
     },
     monthly,
     statusSummary: [...statusSummary.values()],
