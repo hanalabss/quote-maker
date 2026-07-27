@@ -1166,9 +1166,22 @@ export default function QuoteDetailPage({
                           />
                           {p.value ? (
                             <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-emerald-100 text-emerald-700 font-medium whitespace-nowrap">입금</span>
-                          ) : (
-                            <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-gray-100 text-gray-500 whitespace-nowrap">미기록</span>
-                          )}
+                          ) : (() => {
+                            // 정확한 입금일 미상 시 행사 종료일을 기본값으로 원클릭 기록
+                            const endDate = quote.confirmedEndDate || quote.eventEndDate;
+                            return endDate ? (
+                              <button
+                                onClick={() => updatePayment(p.field, endDate)}
+                                disabled={saving}
+                                className="text-[10px] px-1.5 py-0.5 rounded-full border border-emerald-300 text-emerald-700 bg-white hover:bg-emerald-50 disabled:opacity-50 whitespace-nowrap transition-colors"
+                                title={`행사 종료일(${endDate})로 입금 처리`}
+                              >
+                                종료일로 기록
+                              </button>
+                            ) : (
+                              <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-gray-100 text-gray-500 whitespace-nowrap">미기록</span>
+                            );
+                          })()}
                         </div>
                       </div>
                     ))}
