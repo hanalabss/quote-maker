@@ -45,8 +45,9 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const status = searchParams.get("status");
 
-    // sales 역할은 자기가 만든 견적만 조회
+    // sales 역할은 자기가 만든 견적만 조회, 외주 프로젝트는 dev만 조회 가능
     const where: Record<string, unknown> = {};
+    if (user.role !== "dev") where.isExternal = false;
     if (status) where.status = status;
     if (user.role === "sales") {
       where.createdById = user.id;

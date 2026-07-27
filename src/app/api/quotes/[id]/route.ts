@@ -100,6 +100,11 @@ export async function GET(
     return NextResponse.json({ error: "권한이 없습니다" }, { status: 403 });
   }
 
+  // 외주 프로젝트는 dev만 조회 가능
+  if (quote.isExternal && user.role !== "dev") {
+    return NextResponse.json({ error: "권한이 없습니다" }, { status: 403 });
+  }
+
   return NextResponse.json(quote);
 }
 
@@ -120,6 +125,11 @@ export async function PATCH(
   const quote = await prisma.quote.findUnique({ where: { id } });
   if (!quote) {
     return NextResponse.json({ error: "견적을 찾을 수 없습니다" }, { status: 404 });
+  }
+
+  // 외주 프로젝트는 dev만 수정 가능
+  if (quote.isExternal && user.role !== "dev") {
+    return NextResponse.json({ error: "권한이 없습니다" }, { status: 403 });
   }
 
   // 상태 변경
@@ -308,6 +318,33 @@ export async function PATCH(
     return NextResponse.json(updated);
   }
 
+  // 입금 기록 (계약금/잔금 입금일 — dev 전용)
+  if (body.payment && typeof body.payment === "object") {
+    if (user.role !== "dev") {
+      return NextResponse.json({ error: "권한이 없습니다" }, { status: 403 });
+    }
+    const paymentData: Record<string, string | null> = {};
+    for (const key of ["depositPaidAt", "balancePaidAt"] as const) {
+      if (key in body.payment) {
+        const v = body.payment[key];
+        paymentData[key] = v === "" || v === null ? null : String(v);
+      }
+    }
+    if (Object.keys(paymentData).length === 0) {
+      return NextResponse.json({ error: "수정할 내용이 없습니다" }, { status: 400 });
+    }
+    const updated = await prisma.quote.update({
+      where: { id },
+      data: paymentData,
+      include: {
+        items: { orderBy: { sortOrder: "asc" } },
+        createdBy: { select: { name: true, team: true, email: true } },
+        reviewedBy: { select: { name: true } },
+      },
+    });
+    return NextResponse.json(updated);
+  }
+
   // 기본정보 수정 (가격 무관 필드 — 사업팀 본인 견적 또는 dev)
   if (body.basicInfo && typeof body.basicInfo === "object") {
     const editableStates = ["pending", "reviewing", "approved"];
@@ -363,6 +400,13 @@ export async function PATCH(
   if (body.items) {
     if (user.role !== "dev") {
       return NextResponse.json({ error: "권한이 없습니다" }, { status: 403 });
+    }
+    // 확정/완료된 견적은 매출 인식이 끝났으므로 항목(금액) 무흔적 수정 금지 (basicInfo와 동일 기준)
+    if (!["pending", "reviewing", "approved"].includes(quote.status)) {
+      return NextResponse.json(
+        { error: "확정/완료된 견적은 항목을 수정할 수 없습니다" },
+        { status: 400 }
+      );
     }
 
     // 기존 항목 삭제 후 재생성

@@ -48,6 +48,7 @@ interface QuoteDetail {
   quoteNumber: string;
   status: QuoteStatus;
   type: string;
+  isExternal: boolean;
   eventName: string;
   eventDate: string | null;
   eventEndDate: string | null;
@@ -73,6 +74,8 @@ interface QuoteDetail {
   confirmedEndDate: string | null;
   devDeadline: string | null;
   devCompletedAt: string | null;
+  depositPaidAt: string | null;
+  balancePaidAt: string | null;
   lostReason: string | null;
   subtotal: number;
   vat: number;
@@ -404,6 +407,20 @@ export default function QuoteDetailPage({
     setShowLostModal(false);
   }
 
+  // 입금일 기록 (계약금/잔금 — dev 전용)
+  async function updatePayment(field: "depositPaidAt" | "balancePaidAt", value: string | null) {
+    setSaving(true);
+    const res = await fetch(`/api/quotes/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ payment: { [field]: value } }),
+    });
+    const data = await res.json();
+    if (res.ok) setQuote(data);
+    else alert(data.error || "입금 기록에 실패했습니다");
+    setSaving(false);
+  }
+
   // 개발 완료(배포) 토글 — status 전환이 아니라 devCompletedAt 기록 (dev 전용)
   async function updateDevCompleted(done: boolean) {
     setSaving(true);
@@ -588,6 +605,11 @@ export default function QuoteDetailPage({
               {quote.quoteNumber} · 요청 {new Date(quote.createdAt).toLocaleDateString("ko-KR")}
             </p>
             <h1 className="text-base sm:text-xl font-bold flex items-center gap-2 flex-wrap mt-0.5">
+              {quote.isExternal && (
+                <span className="text-xs px-2.5 py-0.5 rounded-full shrink-0 font-medium text-purple-700 bg-purple-50 border border-purple-200">
+                  외주
+                </span>
+              )}
               <span className="truncate">{quote.eventName}</span>
               <span
                 className={`text-xs px-2.5 py-0.5 rounded-full shrink-0 font-medium ${
@@ -1047,12 +1069,16 @@ export default function QuoteDetailPage({
             <div className={`${quote.status === "completed" ? "bg-slate-50 border-slate-200" : "bg-emerald-50 border-emerald-200"} rounded-xl border p-5`}>
               <h3 className={`${quote.status === "completed" ? "text-slate-800" : "text-emerald-800"} font-medium mb-3 flex items-center gap-2`}>
                 {quote.status === "completed" ? <CheckCheck className="w-4 h-4" /> : <CalendarCheck className="w-4 h-4" />}
-                {quote.status === "completed" ? "행사 완료" : "행사 확정 정보"}
+                {quote.isExternal
+                  ? quote.status === "completed" ? "프로젝트 완료" : "프로젝트 확정 정보"
+                  : quote.status === "completed" ? "행사 완료" : "행사 확정 정보"}
               </h3>
               <dl className="space-y-2 text-sm">
                 {quote.confirmedDate && (
                   <div className="flex justify-between">
-                    <dt className={quote.status === "completed" ? "text-slate-600" : "text-emerald-600"}>행사 기간</dt>
+                    <dt className={quote.status === "completed" ? "text-slate-600" : "text-emerald-600"}>
+                      {quote.isExternal ? "계약/착수일" : "행사 기간"}
+                    </dt>
                     <dd className="font-medium">
                       {quote.confirmedDate}
                       {quote.confirmedEndDate && quote.confirmedEndDate !== quote.confirmedDate && ` ~ ${quote.confirmedEndDate}`}
@@ -1110,6 +1136,45 @@ export default function QuoteDetailPage({
                   </div>
                 )}
               </dl>
+
+              {/* 입금 기록 (계약금 40 / 잔금 60) — dev 전용 */}
+              {isDev && (
+                <div className="mt-4 pt-3 border-t border-emerald-200/60">
+                  <p className={`text-xs font-medium mb-2 ${quote.status === "completed" ? "text-slate-600" : "text-emerald-700"}`}>
+                    입금 기록
+                  </p>
+                  <div className="grid sm:grid-cols-2 gap-2 text-sm">
+                    {(
+                      [
+                        { field: "depositPaidAt", label: "계약금 40%", amount: Math.round(quote.totalAmount * 0.4), value: quote.depositPaidAt },
+                        { field: "balancePaidAt", label: "잔금 60%", amount: quote.totalAmount - Math.round(quote.totalAmount * 0.4), value: quote.balancePaidAt },
+                      ] as const
+                    ).map((p) => (
+                      <div key={p.field} className="flex items-center justify-between gap-2 bg-white/70 rounded-lg border border-gray-200 px-3 py-2">
+                        <div className="min-w-0">
+                          <div className="text-xs text-gray-500">{p.label}</div>
+                          <div className="font-medium tabular-nums">{formatKRW(p.amount)}원</div>
+                        </div>
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          <input
+                            type="date"
+                            value={p.value ?? ""}
+                            disabled={saving}
+                            onChange={(e) => updatePayment(p.field, e.target.value || null)}
+                            className="text-xs border rounded-md px-1.5 py-1 bg-white text-gray-700 outline-none"
+                            aria-label={`${p.label} 입금일`}
+                          />
+                          {p.value ? (
+                            <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-emerald-100 text-emerald-700 font-medium whitespace-nowrap">입금</span>
+                          ) : (
+                            <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-gray-100 text-gray-500 whitespace-nowrap">미기록</span>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
@@ -1354,14 +1419,17 @@ export default function QuoteDetailPage({
 
             {quote.status === "confirmed" && canAct && (
               <>
-                <button
-                  onClick={() => updateStatus("approved")}
-                  disabled={saving}
-                  className="flex items-center gap-1.5 px-3 py-2.5 text-sm text-amber-700 rounded-lg hover:bg-amber-50 disabled:opacity-50 transition-colors"
-                >
-                  <RotateCcw className="w-4 h-4" />
-                  <span className="hidden sm:inline">승인으로 되돌리기</span>
-                </button>
+                {/* 외주는 되돌리기 숨김 — 오클릭 시 confirmedDate/devDeadline 초기화로 매출 인식이 사라짐 */}
+                {!quote.isExternal && (
+                  <button
+                    onClick={() => updateStatus("approved")}
+                    disabled={saving}
+                    className="flex items-center gap-1.5 px-3 py-2.5 text-sm text-amber-700 rounded-lg hover:bg-amber-50 disabled:opacity-50 transition-colors"
+                  >
+                    <RotateCcw className="w-4 h-4" />
+                    <span className="hidden sm:inline">승인으로 되돌리기</span>
+                  </button>
+                )}
                 {isDev && !quote.devCompletedAt && (
                   <button
                     onClick={() => updateDevCompleted(true)}
@@ -1388,7 +1456,7 @@ export default function QuoteDetailPage({
                   className="flex items-center gap-1.5 px-5 py-2.5 text-sm font-medium bg-slate-700 text-white rounded-lg hover:bg-slate-800 disabled:opacity-50 transition-colors"
                 >
                   <CheckCheck className="w-4 h-4" />
-                  행사 완료 처리
+                  {quote.isExternal ? "완료 처리" : "행사 완료 처리"}
                 </button>
               </>
             )}
