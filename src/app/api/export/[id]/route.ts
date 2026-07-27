@@ -40,6 +40,11 @@ export async function GET(
     return NextResponse.json({ error: "견적을 찾을 수 없습니다" }, { status: 404 });
   }
 
+  // 외주 프로젝트는 dev만 다운로드 가능
+  if (quote.isExternal && user.role !== "dev") {
+    return NextResponse.json({ error: "권한이 없습니다" }, { status: 403 });
+  }
+
   const wb = new ExcelJS.Workbook();
   const ws = wb.addWorksheet("견적서");
 

@@ -76,8 +76,15 @@ model Quote {
   devCompletedAt   DateTime?  // 개발 완료(배포) 일시
   lostReason       String?    // 미진행 사유
 
+  // 입금 추적 (지불조건: 계약금 40%, 잔금 60%)
+  depositPaidAt    String?    // 계약금 입금일 (YYYY-MM-DD)
+  balancePaidAt    String?    // 잔금 입금일 (YYYY-MM-DD)
+
   // 숨김 (요청자가 삭제 시 화면에서만 숨김, DB 유지)
   isHidden        Boolean  @default(false)
+
+  // 외주/외부 프로젝트 (dev 전용, 견적 목록에는 안 보이고 매출 리포트에만 집계)
+  isExternal      Boolean  @default(false)
 
   // 기타
   notes           String?

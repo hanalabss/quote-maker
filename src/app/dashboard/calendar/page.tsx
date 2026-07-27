@@ -12,6 +12,10 @@ export default async function CalendarPage() {
     status: "confirmed",
     type: { not: "sale" }, // 판매 유형 제외 (행사 아님)
   };
+  // 외주는 dev만 (dev 달력에는 행사형 외주가 있으면 표시)
+  if (user.role !== "dev") {
+    where.isExternal = false;
+  }
 
   if (user.role === "sales") {
     where.createdById = user.id;

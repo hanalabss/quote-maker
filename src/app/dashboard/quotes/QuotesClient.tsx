@@ -23,6 +23,7 @@ interface QuoteListItem {
   confirmedDate?: string | null;
   confirmedEndDate?: string | null;
   eventEndDate?: string | null;
+  isExternal?: boolean;
 }
 
 // 생애주기 배지 — "초과"류 경고는 아직 해야 할 일이 늦었을 때만 (판정: lib/lifecycle)
@@ -56,26 +57,6 @@ const STAGES: { key: QuoteStatus; label: string; accent: string }[] = [
   { key: "completed", label: "완료", accent: "bg-slate-500" },
 ];
 
-const STAGE_PROGRESS: Record<string, number> = {
-  pending: 1,
-  reviewing: 2,
-  approved: 3,
-  confirmed: 4,
-  completed: 5,
-};
-
-function ProgressDots({ status }: { status: string }) {
-  const filled = STAGE_PROGRESS[status];
-  if (!filled) return null;
-  return (
-    <span className="hidden md:inline-flex gap-[3px] align-middle ml-2" aria-hidden="true">
-      {STAGES.map((s, i) => (
-        <i key={s.key} className={`w-[5px] h-[5px] rounded-full ${i < filled ? "bg-blue-600" : "bg-gray-200"}`} />
-      ))}
-    </span>
-  );
-}
-
 function DateCell({ q }: { q: QuoteListItem }) {
   const isFinished = q.status === "confirmed" || q.status === "completed";
   const endDate = q.confirmedEndDate || q.eventEndDate;
@@ -98,7 +79,7 @@ function DateCell({ q }: { q: QuoteListItem }) {
 type SortKey = "latest" | "deadline" | "amount";
 
 export function QuotesClient({
-  quotes,
+  quotes: allQuotes,
   userRole,
   showPrice = true,
 }: {
@@ -109,7 +90,15 @@ export function QuotesClient({
   const [filter, setFilter] = useState("");
   const [search, setSearch] = useState("");
   const [sort, setSort] = useState<SortKey>("latest");
+  const [showExternal, setShowExternal] = useState(false);
   const router = useRouter();
+
+  // 외주 프로젝트(dev 전용 데이터)는 별도 탭으로 분리 — 기본 목록/카운트에서 제외
+  const externalQuotes = useMemo(() => allQuotes.filter((q) => q.isExternal), [allQuotes]);
+  const quotes = useMemo(
+    () => (showExternal ? externalQuotes : allQuotes.filter((q) => !q.isExternal)),
+    [allQuotes, externalQuotes, showExternal]
+  );
 
   const statusCounts = quotes.reduce(
     (acc, q) => {
@@ -120,16 +109,17 @@ export function QuotesClient({
   );
 
   // 오늘 할 일: 개발 마감 임박(미배포 & D-3 이내/초과/배포 미확인) + 완료 처리 대기 + 검토 대기
+  // — 외주 포함 전체(allQuotes) 기준. 납기 관제는 탭과 무관하게 항상 떠야 함.
   const today = todayStr();
   const badges = useMemo(
-    () => new Map(quotes.map((q) => [q.id, getLifecycleBadge(q, today)])),
-    [quotes, today]
+    () => new Map(allQuotes.map((q) => [q.id, getLifecycleBadge(q, today)])),
+    [allQuotes, today]
   );
   const urgent = useMemo(() => {
     // 정렬 우선순위: 배포 미확인 → 초과 큰 순 → D-day 작은 순
     const rank = (b: LifecycleBadge) =>
       b?.kind === "deploy-missing" ? -1000 : b?.kind === "overdue" ? -b.days : b?.kind === "dday" ? b.days : 9999;
-    return quotes
+    return allQuotes
       .map((q) => ({ q, badge: badges.get(q.id) ?? null }))
       .filter(
         ({ badge }) =>
@@ -138,24 +128,27 @@ export function QuotesClient({
           (badge?.kind === "dday" && badge.days <= 3)
       )
       .sort((a, b) => rank(a.badge) - rank(b.badge));
-  }, [quotes, badges]);
+  }, [allQuotes, badges]);
   const awaitingComplete = useMemo(
-    () => quotes.filter((q) => badges.get(q.id)?.kind === "awaiting-complete"),
-    [quotes, badges]
+    () => allQuotes.filter((q) => badges.get(q.id)?.kind === "awaiting-complete"),
+    [allQuotes, badges]
   );
+  const pendingCount = useMemo(() => allQuotes.filter((q) => q.status === "pending").length, [allQuotes]);
 
   const oldestPendingDays = useMemo(() => {
-    const pendings = quotes.filter((q) => q.status === "pending");
+    const pendings = allQuotes.filter((q) => q.status === "pending");
     if (pendings.length === 0) return null;
     const oldest = pendings.reduce((a, b) =>
       new Date(a.createdAt) < new Date(b.createdAt) ? a : b
     );
     const days = Math.floor((Date.now() - new Date(oldest.createdAt).getTime()) / (1000 * 60 * 60 * 24));
     return days;
-  }, [quotes]);
+  }, [allQuotes]);
 
   const filtered = useMemo(() => {
-    const base = quotes.filter((q) => {
+    // 검색 중에는 외주/자체 탭을 가로질러 전체에서 찾는다 (행의 외주 배지로 구분)
+    const searchBase = search ? allQuotes : quotes;
+    const base = searchBase.filter((q) => {
       const matchFilter = !filter || q.status === filter;
       const matchSearch =
         !search ||
@@ -177,7 +170,7 @@ export function QuotesClient({
     }
     // latest: 서버에서 이미 createdAt desc
     return sorted;
-  }, [quotes, filter, search, sort]);
+  }, [quotes, allQuotes, filter, search, sort]);
 
   const goTo = (id: string) => router.push(`/dashboard/quotes/${id}`);
 
@@ -195,7 +188,7 @@ export function QuotesClient({
       </div>
 
       {/* 오늘 할 일 스트립 */}
-      {(urgent.length > 0 || awaitingComplete.length > 0 || (statusCounts["pending"] || 0) > 0) && (
+      {(urgent.length > 0 || awaitingComplete.length > 0 || pendingCount > 0) && (
         <div className="flex flex-wrap gap-2 mb-4">
           {urgent.length > 0 && (
             <button
@@ -228,13 +221,13 @@ export function QuotesClient({
               <span className="hidden sm:inline">— {awaitingComplete[0].eventName}</span>
             </button>
           )}
-          {(statusCounts["pending"] || 0) > 0 && (
+          {pendingCount > 0 && (
             <button
               onClick={() => setFilter("pending")}
               className="inline-flex items-center gap-1.5 text-xs sm:text-sm font-medium px-3 py-1.5 rounded-full bg-yellow-50 text-yellow-700 border border-yellow-200 hover:bg-yellow-100 transition-colors"
             >
               <Clock className="w-3.5 h-3.5" />
-              검토 대기 {statusCounts["pending"]}건
+              검토 대기 {pendingCount}건
               {oldestPendingDays !== null && oldestPendingDays > 0 && (
                 <span className="hidden sm:inline">· 가장 오래된 요청 {oldestPendingDays}일 전</span>
               )}
@@ -295,6 +288,22 @@ export function QuotesClient({
         >
           전체 보기 <b className="font-semibold tabular-nums">{quotes.length}</b>
         </button>
+        {userRole === "dev" && (
+          <button
+            onClick={() => {
+              setShowExternal(!showExternal);
+              setFilter("");
+            }}
+            aria-pressed={showExternal}
+            className={`inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-full border transition-colors ${
+              showExternal
+                ? "border-purple-400 bg-purple-50 text-purple-700"
+                : "border-dashed border-gray-300 bg-white text-gray-500 hover:bg-gray-50"
+            }`}
+          >
+            외주 <b className="font-semibold text-gray-700 tabular-nums">{externalQuotes.length}</b>
+          </button>
+        )}
       </div>
 
       {/* 검색 + 정렬 */}
@@ -360,7 +369,14 @@ export function QuotesClient({
                       className="hover:bg-gray-50 transition-colors cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-inset"
                     >
                       <td className="px-4 py-3">
-                        <div className="text-sm font-medium max-w-[280px] truncate">{q.eventName}</div>
+                        <div className="text-sm font-medium max-w-[280px] truncate">
+                          {q.isExternal && (
+                            <span className="mr-1.5 inline-block align-middle text-[10px] font-medium text-purple-700 bg-purple-50 border border-purple-200 rounded px-1 py-px">
+                              외주
+                            </span>
+                          )}
+                          {q.eventName}
+                        </div>
                         <div className="text-xs text-gray-400 font-mono mt-0.5">{q.quoteNumber}</div>
                       </td>
                       <td className="px-4 py-3 text-center">
@@ -383,7 +399,6 @@ export function QuotesClient({
                           {STATUS_LABELS[q.status as QuoteStatus]}
                         </span>
                         <LifecycleBadgeView badge={badges.get(q.id) ?? null} />
-                        <ProgressDots status={q.status} />
                       </td>
                       <td className="px-4 py-3 text-sm text-gray-500 text-center hidden md:table-cell">
                         <DateCell q={q} />
@@ -417,7 +432,14 @@ export function QuotesClient({
                     <LifecycleBadgeView badge={badges.get(q.id) ?? null} />
                   </span>
                 </div>
-                <h3 className="text-[15px] font-semibold mb-1 truncate">{q.eventName}</h3>
+                <h3 className="text-[15px] font-semibold mb-1 truncate">
+                  {q.isExternal && (
+                    <span className="mr-1.5 inline-block align-middle text-[10px] font-medium text-purple-700 bg-purple-50 border border-purple-200 rounded px-1 py-px">
+                      외주
+                    </span>
+                  )}
+                  {q.eventName}
+                </h3>
                 <div className="flex items-baseline justify-between gap-2">
                   <span className="text-xs text-gray-400 truncate">
                     {q.requesterName} · {TYPE_LABELS[q.type as QuoteType] || q.type} ·{" "}

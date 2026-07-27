@@ -14,6 +14,21 @@ export async function GET(
 
   const { id } = await params;
 
+  // 견적 접근 권한과 동일한 가드 (sales 본인 견적, 외주는 dev만)
+  const quote = await prisma.quote.findUnique({
+    where: { id },
+    select: { createdById: true, isExternal: true },
+  });
+  if (!quote) {
+    return NextResponse.json({ error: "견적을 찾을 수 없습니다" }, { status: 404 });
+  }
+  if (user.role === "sales" && quote.createdById !== user.id) {
+    return NextResponse.json({ error: "권한이 없습니다" }, { status: 403 });
+  }
+  if (quote.isExternal && user.role !== "dev") {
+    return NextResponse.json({ error: "권한이 없습니다" }, { status: 403 });
+  }
+
   const comments = await prisma.quoteComment.findMany({
     where: { quoteId: id },
     orderBy: { createdAt: "asc" },
@@ -48,6 +63,12 @@ export async function POST(
   if (!quote) {
     return NextResponse.json({ error: "견적을 찾을 수 없습니다" }, { status: 404 });
   }
+  if (user.role === "sales" && quote.createdById !== user.id) {
+    return NextResponse.json({ error: "권한이 없습니다" }, { status: 403 });
+  }
+  if (quote.isExternal && user.role !== "dev") {
+    return NextResponse.json({ error: "권한이 없습니다" }, { status: 403 });
+  }
 
   // 같은 작성자가 10분 내 연속 댓글을 달면 이메일 중복 발송 억제
   const recentByAuthor = await prisma.quoteComment.findFirst({
@@ -78,7 +99,8 @@ export async function POST(
       authorName: user.name,
       authorRole: user.role,
       content: comment.content,
-      requesterEmail: quote.requesterEmail,
+      // 외주 견적은 외부 수신자(요청자)에게 알림을 보내지 않음
+      requesterEmail: quote.isExternal ? null : quote.requesterEmail,
       createdByEmail: quote.createdBy?.email,
     }).catch((err) => console.error("[Email] 댓글 알림 실패:", err));
   }
