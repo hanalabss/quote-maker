@@ -3,7 +3,7 @@ import { prisma } from "@/lib/db";
 import { calculateQuote } from "@/lib/pricing";
 import { sendQuoteNotification } from "@/lib/email";
 import { getAuthUser } from "@/lib/auth";
-import { TYPE_PRICE_RATE } from "@/types";
+import { TYPE_PRICE_RATE, UI_BASIC_TRIGGERS } from "@/types";
 import type { QuoteType } from "@/types";
 
 // 견적번호 생성: QT-YYYYMMDD-XXX (트랜잭션 + 재시도로 레이스컨디션 방지)
@@ -106,15 +106,24 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // 화면 흐름 모듈이 있으면 UI_BASIC 강제 포함 (요청자가 해제해도 서버에서 보정)
+    const moduleCodes: string[] = [...selectedModules];
+    if (
+      moduleCodes.some((c) => UI_BASIC_TRIGGERS.includes(c)) &&
+      !moduleCodes.includes("UI_BASIC")
+    ) {
+      moduleCodes.push("UI_BASIC");
+    }
+
     // 선택된 모듈 조회
     const modules = await prisma.module.findMany({
-      where: { code: { in: selectedModules } },
+      where: { code: { in: moduleCodes } },
       orderBy: { sortOrder: "asc" },
     });
 
     // 자동 포함 모듈 추가 (TEST_QA)
     const autoModules = await prisma.module.findMany({
-      where: { isAutoIncluded: true, code: { notIn: selectedModules } },
+      where: { isAutoIncluded: true, code: { notIn: moduleCodes } },
     });
 
     const allModules = [...modules, ...autoModules];

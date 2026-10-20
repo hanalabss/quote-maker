@@ -5,7 +5,7 @@ import { ArrowLeft, ArrowRight, Check, Send, Loader2, Paperclip, X, FileText, Im
 import Link from "next/link";
 import { formatKRW, applyPriceRate } from "@/lib/pricing";
 import type { QuoteType } from "@/types";
-import { TYPE_LABELS, TYPE_PRICE_RATE } from "@/types";
+import { TYPE_LABELS, TYPE_PRICE_RATE, UI_BASIC_TRIGGERS } from "@/types";
 
 interface Module {
   id: string;
@@ -66,8 +66,7 @@ const SELECT_PRINT_PRICE = 150000;
 const DRAFT_KEY = "qm-request-draft";
 
 // 이 모듈 중 하나라도 선택되면 PRINT_SDK·UI_BASIC 자동 선택
-const PRINT_SDK_TRIGGERS = ["CAM_PHOTO", "QR_UPLOAD", "TEXT_INPUT", "SELECT_PRINT"];
-const UI_BASIC_TRIGGERS = PRINT_SDK_TRIGGERS;
+const PRINT_SDK_TRIGGERS = UI_BASIC_TRIGGERS;
 
 interface Attachment {
   fileName: string;
@@ -198,8 +197,12 @@ export default function RequestPage() {
   }, []);
 
   const priceRate = TYPE_PRICE_RATE[form.quoteType];
+  const needsUi = form.selectedModules.some((c) => UI_BASIC_TRIGGERS.includes(c));
   const selectedModuleData = modules.filter(
-    (m) => form.selectedModules.includes(m.code) || m.isAutoIncluded
+    (m) =>
+      form.selectedModules.includes(m.code) ||
+      m.isAutoIncluded ||
+      (m.code === "UI_BASIC" && needsUi)
   );
   const ksnetExtra = form.useKsnetPayment ? applyPriceRate(KSNET_PRICE, priceRate) : 0;
   const selectPrintExtra = form.screenComposition.includes("select_print") ? applyPriceRate(SELECT_PRINT_PRICE, priceRate) : 0;
@@ -214,6 +217,12 @@ export default function RequestPage() {
   function toggleModule(code: string) {
     setForm((prev) => {
       const isSelected = prev.selectedModules.includes(code);
+
+      // 화면 흐름 모듈이 켜져 있는 동안 UI_BASIC은 해제 불가
+      if (code === "UI_BASIC" && isSelected && prev.selectedModules.some((c) => UI_BASIC_TRIGGERS.includes(c))) {
+        return prev;
+      }
+
       let next = isSelected
         ? prev.selectedModules.filter((c) => c !== code)
         : [...prev.selectedModules, code];
@@ -616,7 +625,8 @@ export default function RequestPage() {
                 {modules
                   .filter((m) => !m.isAutoIncluded)
                   .map((mod) => {
-                    const selected = form.selectedModules.includes(mod.code);
+                    const uiLocked = mod.code === "UI_BASIC" && needsUi;
+                    const selected = form.selectedModules.includes(mod.code) || uiLocked;
                     const isNegotiable = mod.code === "AI_STYLE" && mod.basePrice === 0;
                     return (
                       <button
@@ -641,6 +651,9 @@ export default function RequestPage() {
                           <div className="text-sm font-semibold">{mod.name}</div>
                           {mod.description && (
                             <p className="text-xs text-gray-500 mt-0.5 leading-snug">{mod.description}</p>
+                          )}
+                          {uiLocked && (
+                            <p className="text-xs text-blue-600 mt-0.5">화면 기능 선택 시 자동 포함</p>
                           )}
                           <div
                             className={`text-xs font-semibold mt-1.5 tabular-nums ${
@@ -743,7 +756,7 @@ export default function RequestPage() {
               </div>
 
               {/* 화면 구성 선택 - UI_BASIC 모듈 선택 시 표시 */}
-              {form.selectedModules.includes("UI_BASIC") && (
+              {(form.selectedModules.includes("UI_BASIC") || needsUi) && (
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
                     화면 스크린 구성

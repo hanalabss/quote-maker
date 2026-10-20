@@ -49,6 +49,9 @@ export const TYPE_PRICE_RATE: Record<QuoteType, number> = {
   re_event: 0.3,
 };
 
+// 화면 흐름 모듈 — 하나라도 선택되면 UI_BASIC 필수 (견적에서 UI 개발 누락 방지)
+export const UI_BASIC_TRIGGERS = ["CAM_PHOTO", "QR_UPLOAD", "TEXT_INPUT", "SELECT_PRINT"];
+
 export const STATUS_LABELS: Record<QuoteStatus, string> = {
   draft: "임시저장",
   pending: "대기중",
