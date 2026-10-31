@@ -26,6 +26,9 @@ const CATEGORY_LABELS: Record<string, string> = {
   server: "서버",
   ai: "AI",
   payment: "결제",
+  content: "참여·콘텐츠",
+  delivery: "결과 전달",
+  link: "연동·운영",
   external: "외주",
   etc: "기타",
 };

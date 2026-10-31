@@ -58,12 +58,29 @@ const DB_LOG_NAME = "DB 직접 연결 로그";
 // 이 모듈 중 하나라도 켜면 PRINT_SDK·UI_BASIC 자동 선택
 export const PRINT_SDK_TRIGGERS = ["CAM_PHOTO", "QR_UPLOAD", "TEXT_INPUT", "SELECT_PRINT"];
 
+// 이 모듈을 켜면 UI_BASIC 자동 선택 (화면이 있는 기능 전부)
+export const UI_BASIC_TRIGGERS = [
+  ...PRINT_SDK_TRIGGERS,
+  "KSNET_PAY", "AI_STYLE", "FACE_SWAP", "AR_LIVE",
+  "QUIZ_SURVEY", "RANDOM_DRAW", "MINI_GAME", "MULTI_LANG", "AUDIO_BGM",
+  "MOBILE_SAVE", "SMS_SEND", "TAG_TRIGGER", "LIST_UPLOAD",
+];
+
+// AI 처리 방식은 둘 중 하나 — 자사 AI 서버(AI_STYLE) 또는 외부 AI 서비스(AI_FEE)
+export const AI_EXCLUSIVE = ["AI_STYLE", "AI_FEE"];
+
 export function toggleModuleCode(selected: string[], code: string): string[] {
   const isSelected = selected.includes(code);
   let next = isSelected ? selected.filter((c) => c !== code) : [...selected, code];
-  if (!isSelected && PRINT_SDK_TRIGGERS.includes(code)) {
-    if (!next.includes("PRINT_SDK")) next = [...next, "PRINT_SDK"];
-    if (!next.includes("UI_BASIC")) next = [...next, "UI_BASIC"];
+  if (!isSelected && AI_EXCLUSIVE.includes(code)) {
+    next = next.filter((c) => c === code || !AI_EXCLUSIVE.includes(c));
+  }
+  if (!isSelected && PRINT_SDK_TRIGGERS.includes(code) && !next.includes("PRINT_SDK")) {
+    next = [...next, "PRINT_SDK"];
+  }
+  // 화면이 있는 기능은 UI 개발 없이는 성립하지 않음 — UI 누락 보완이 반복돼 자동 추가 범위를 넓힘
+  if (!isSelected && UI_BASIC_TRIGGERS.includes(code) && !next.includes("UI_BASIC")) {
+    next = [...next, "UI_BASIC"];
   }
   return next;
 }

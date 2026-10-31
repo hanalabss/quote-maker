@@ -21,8 +21,9 @@ export default async function QuotesPage() {
     where,
     include: {
       items: { orderBy: { sortOrder: "asc" } },
-      createdBy: { select: { name: true, team: true } },
+      createdBy: { select: { name: true, team: true, role: true } },
       reviewedBy: { select: { name: true } },
+      comments: { orderBy: { createdAt: "desc" }, take: 1, select: { user: { select: { role: true } } } },
     },
     orderBy: { createdAt: "desc" },
   });
@@ -38,7 +39,8 @@ export default async function QuotesPage() {
     requesterName: q.requesterName,
     totalAmount: showPrice ? q.totalAmount : 0,
     createdAt: q.createdAt.toISOString(),
-    createdBy: q.createdBy,
+    createdBy: q.createdBy ? { name: q.createdBy.name, team: q.createdBy.team } : null,
+    createdByRole: q.createdBy?.role ?? null,
     devDeadline: q.devDeadline,
     devCompletedAt: q.devCompletedAt?.toISOString() ?? null,
     confirmedDate: q.confirmedDate,
@@ -46,6 +48,9 @@ export default async function QuotesPage() {
     eventDate: q.eventDate,
     eventEndDate: q.eventEndDate,
     isExternal: q.isExternal,
+    depositPaidAt: q.depositPaidAt,
+    balancePaidAt: q.balancePaidAt,
+    lastCommentRole: q.comments[0]?.user.role ?? null,
   }));
 
   return <QuotesClient quotes={serialized} userRole={user.role} showPrice={showPrice} />;

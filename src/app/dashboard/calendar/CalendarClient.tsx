@@ -50,14 +50,16 @@ export function CalendarClient({
           {userRole === "sales" ? "내 행사 달력" : "행사 달력"}
         </h1>
         <div className="text-sm text-gray-500">
-          확정 {events.length}건
+          진행 {events.filter((ev) => ev.status !== "completed").length}건 · 완료{" "}
+          {events.filter((ev) => ev.status === "completed").length}건
         </div>
       </div>
 
       {/* 개발 진행 현황 (마감 임박순) */}
       {(() => {
+        // 아직 배포 전인 확정 행사만 — 배포·완료된 건은 마감 관리 대상이 아님
         const upcoming = events
-          .filter((ev) => ev.devDeadline)
+          .filter((ev) => ev.devDeadline && !ev.devCompletedAt && ev.status !== "completed")
           .map((ev) => {
             const deadline = parseYMD(ev.devDeadline!);
             const now = new Date();
@@ -154,8 +156,12 @@ export function CalendarClient({
           재행사
         </span>
         <span className="flex items-center gap-1">
-          <span className="w-3 h-3 rounded bg-red-100 border border-red-300" />
-          개발 마감
+          <span className="w-3 h-3 rounded bg-gray-200" />
+          완료된 행사
+        </span>
+        <span className="flex items-center gap-1">
+          <span className="w-3 h-3 rounded bg-red-50 border border-red-200" />
+          개발 마감 (배포 전)
         </span>
       </div>
 
@@ -171,7 +177,7 @@ export function CalendarClient({
           const d = new Date(ev.confirmedDate + "T00:00:00");
           return d.getFullYear() === year && d.getMonth() === month;
         }).length === 0 ? (
-          <p className="text-sm text-gray-400 text-center py-4">이번 달 확정 행사가 없습니다</p>
+          <p className="text-sm text-gray-400 text-center py-4">이번 달 행사가 없습니다</p>
         ) : (
           <div className="space-y-2">
             {events
@@ -197,7 +203,7 @@ export function CalendarClient({
                   </div>
                   <div className="text-xs text-gray-500 mt-1">
                     {ev.confirmedDate}{ev.eventEndDate ? ` ~ ${ev.eventEndDate}` : ""}
-                    {ev.devDeadline && (
+                    {ev.devDeadline && !ev.devCompletedAt && ev.status !== "completed" && (
                       <span className="ml-2 text-red-600">마감: {ev.devDeadline}</span>
                     )}
                   </div>

@@ -7,6 +7,7 @@ import { formatKRW } from "@/lib/pricing";
 import type { QuoteStatus, QuoteType } from "@/types";
 import { STATUS_LABELS, STATUS_COLORS, TYPE_LABELS, TYPE_COLORS } from "@/types";
 import { getLifecycleBadge, todayStr, type LifecycleBadge } from "@/lib/lifecycle";
+import { getNextAction, ACTOR_LABELS } from "@/lib/nextAction";
 
 interface QuoteListItem {
   id: string;
@@ -25,6 +26,21 @@ interface QuoteListItem {
   eventDate?: string | null;
   eventEndDate?: string | null;
   isExternal?: boolean;
+  depositPaidAt?: string | null;
+  balancePaidAt?: string | null;
+  lastCommentRole?: string | null;
+  createdByRole?: string | null;
+}
+
+// 다음 차례 한 줄 (판정: lib/nextAction)
+function NextActionLine({ q, today, className = "" }: { q: QuoteListItem; today: string; className?: string }) {
+  const a = getNextAction(q, today);
+  if (!a.actor) return null;
+  return (
+    <div className={`text-xs mt-0.5 truncate ${a.tone === "warn" ? "text-amber-700" : "text-gray-500"} ${className}`}>
+      <b className="font-medium">{ACTOR_LABELS[a.actor]}</b> · {a.label}
+    </div>
+  );
 }
 
 // 생애주기 배지 — "초과"류 경고는 아직 해야 할 일이 늦었을 때만 (판정: lib/lifecycle)
@@ -417,6 +433,7 @@ export function QuotesClient({
                           {q.eventName}
                         </div>
                         <div className="text-xs text-gray-400 font-mono mt-0.5">{q.quoteNumber}</div>
+                        <NextActionLine q={q} today={today} className="max-w-[280px]" />
                       </td>
                       <td className="px-4 py-3 text-center">
                         <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium ${
@@ -479,6 +496,7 @@ export function QuotesClient({
                   )}
                   {q.eventName}
                 </h3>
+                <NextActionLine q={q} today={today} className="mb-1" />
                 <div className="flex items-baseline justify-between gap-2">
                   <span className="text-xs text-gray-400 truncate">
                     {q.requesterName} · {TYPE_LABELS[q.type as QuoteType] || q.type} ·{" "}

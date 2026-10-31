@@ -10,6 +10,7 @@ import { applyPriceRate, formatKRW } from "@/lib/pricing";
 import { TYPE_PRICE_RATE } from "@/types";
 import type { QuoteType } from "@/types";
 import { buildBaselineMap, normalizeItemName } from "@/lib/baseline";
+import { redactQuotePrices } from "@/lib/priceVisibility";
 import { buildRequestItems, SCREEN_FLOWS } from "@/lib/requestItems";
 
 // 승인 가드레일: 단가·납기 자동 검증. 경고 목록 반환 (soft gate — overrideReason으로 강행 가능)
@@ -83,7 +84,7 @@ export async function GET(
     where: { id },
     include: {
       items: { orderBy: { sortOrder: "asc" } },
-      createdBy: { select: { name: true, team: true, email: true } },
+      createdBy: { select: { name: true, team: true, email: true, role: true } },
       reviewedBy: { select: { name: true } },
       comments: {
         orderBy: { createdAt: "asc" },
@@ -106,7 +107,7 @@ export async function GET(
     return NextResponse.json({ error: "권한이 없습니다" }, { status: 403 });
   }
 
-  return NextResponse.json(quote);
+  return NextResponse.json(redactQuotePrices(quote, user.role));
 }
 
 export async function PATCH(
@@ -257,7 +258,7 @@ export async function PATCH(
       data: updateData,
       include: {
         items: { orderBy: { sortOrder: "asc" } },
-        createdBy: { select: { name: true, team: true, email: true } },
+        createdBy: { select: { name: true, team: true, email: true, role: true } },
       },
     });
 
@@ -303,7 +304,7 @@ export async function PATCH(
       }).catch((err) => console.error("[Email] 확정 알림 실패:", err));
     }
 
-    return NextResponse.json(updated);
+    return NextResponse.json(redactQuotePrices(updated, user.role));
   }
 
   // 개발 완료(배포) 토글 — 확정 상태에서 dev만 (상태 enum 변경 없이 생애주기 단계만 기록)
@@ -322,11 +323,11 @@ export async function PATCH(
       data: { devCompletedAt: body.devCompleted ? new Date() : null },
       include: {
         items: { orderBy: { sortOrder: "asc" } },
-        createdBy: { select: { name: true, team: true, email: true } },
+        createdBy: { select: { name: true, team: true, email: true, role: true } },
         reviewedBy: { select: { name: true } },
       },
     });
-    return NextResponse.json(updated);
+    return NextResponse.json(redactQuotePrices(updated, user.role));
   }
 
   // 입금 기록 (계약금/잔금 입금일 — dev 전용)
@@ -349,11 +350,11 @@ export async function PATCH(
       data: paymentData,
       include: {
         items: { orderBy: { sortOrder: "asc" } },
-        createdBy: { select: { name: true, team: true, email: true } },
+        createdBy: { select: { name: true, team: true, email: true, role: true } },
         reviewedBy: { select: { name: true } },
       },
     });
-    return NextResponse.json(updated);
+    return NextResponse.json(redactQuotePrices(updated, user.role));
   }
 
   // 기능 수정 (기능 선택·화면 구성 → 항목·금액 재산정) — 대기중(pending)일 때만, 요청자 본인 또는 dev
@@ -474,7 +475,7 @@ export async function PATCH(
       where: { id },
       include: {
         items: { orderBy: { sortOrder: "asc" } },
-        createdBy: { select: { name: true, team: true, email: true } },
+        createdBy: { select: { name: true, team: true, email: true, role: true } },
         reviewedBy: { select: { name: true } },
         comments: {
           orderBy: { createdAt: "asc" },
@@ -482,7 +483,7 @@ export async function PATCH(
         },
       },
     });
-    return NextResponse.json(updated);
+    return NextResponse.json(redactQuotePrices(updated, user.role));
   }
 
   // 기본정보 수정 (가격 무관 필드 — 사업팀 본인 견적 또는 dev)
@@ -530,11 +531,11 @@ export async function PATCH(
       data: basicData,
       include: {
         items: { orderBy: { sortOrder: "asc" } },
-        createdBy: { select: { name: true, team: true, email: true } },
+        createdBy: { select: { name: true, team: true, email: true, role: true } },
         reviewedBy: { select: { name: true } },
       },
     });
-    return NextResponse.json(updated);
+    return NextResponse.json(redactQuotePrices(updated, user.role));
   }
 
   // 항목 수정 (개발팀 검토 시)
@@ -589,7 +590,7 @@ export async function PATCH(
       include: { items: { orderBy: { sortOrder: "asc" } } },
     });
 
-    return NextResponse.json(updated);
+    return NextResponse.json(redactQuotePrices(updated, user.role));
   }
 
   return NextResponse.json({ error: "수정할 내용이 없습니다" }, { status: 400 });

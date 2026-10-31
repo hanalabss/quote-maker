@@ -29,6 +29,11 @@ export function todayStr(now: Date = new Date()): string {
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
 }
 
+// 서버 컴포넌트용 — 서버 TZ(Vercel=UTC)와 무관하게 한국 날짜 yyyy-mm-dd
+export function kstToday(now: Date = new Date()): string {
+  return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Seoul" }).format(now);
+}
+
 // to - from (일 단위, yyyy-mm-dd 문자열)
 export function diffDays(from: string, to: string): number {
   const a = new Date(from + "T00:00:00");

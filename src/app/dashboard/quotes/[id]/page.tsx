@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, use } from "react";
+import { useState, useEffect, useRef, use } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/components/AuthProvider";
@@ -27,8 +27,12 @@ import {
   Clock,
   PauseCircle,
   PlayCircle,
+  MoreHorizontal,
+  type LucideIcon,
 } from "lucide-react";
 import { formatKRW } from "@/lib/pricing";
+import { getNextAction, ACTOR_LABELS } from "@/lib/nextAction";
+import { settlementBaseDate, settlementDates } from "@/lib/settlement";
 import type { QuoteStatus, QuoteType } from "@/types";
 import { STATUS_LABELS, STATUS_COLORS, TYPE_LABELS, TYPE_COLORS } from "@/types";
 import { normalizeItemName, type BaselineMap } from "@/lib/baseline";
@@ -88,7 +92,7 @@ interface QuoteDetail {
   createdById: string | null;
   items: QuoteItem[];
   createdAt: string;
-  createdBy?: { name: string; team: string; email: string } | null;
+  createdBy?: { name: string; team: string; email: string; role?: string } | null;
   reviewedBy?: { name: string } | null;
   comments?: QuoteCommentType[];
 }
@@ -267,12 +271,81 @@ function StatusStepper({ quote }: { quote: QuoteDetail }) {
   );
 }
 
+interface MoreAction {
+  label: string;
+  icon: LucideIcon;
+  run: () => void;
+  danger?: boolean;
+}
+
+// 액션바 "더보기" — 주요 행동 외의 이탈·되돌리기 행동을 위로 펼치는 메뉴
+function MoreMenu({ actions, disabled }: { actions: MoreAction[]; disabled: boolean }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setOpen(false);
+    };
+    document.addEventListener("mousedown", onDown);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDown);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [open]);
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        disabled={disabled}
+        aria-haspopup="menu"
+        aria-expanded={open}
+        className="flex items-center gap-1.5 px-3 py-2.5 text-sm text-gray-600 border bg-white rounded-lg hover:bg-gray-50 disabled:opacity-50 transition-colors"
+      >
+        <MoreHorizontal className="w-4 h-4" />
+        더보기
+      </button>
+      {open && (
+        <div role="menu" className="absolute bottom-full right-0 mb-2 min-w-[180px] bg-white border rounded-lg shadow-lg py-1 z-30">
+          {actions.map((a) => (
+            <button
+              key={a.label}
+              type="button"
+              role="menuitem"
+              onClick={() => {
+                setOpen(false);
+                a.run();
+              }}
+              className={`w-full flex items-center gap-2 px-3 py-2 text-sm text-left hover:bg-gray-50 ${
+                a.danger ? "text-red-600" : "text-gray-700"
+              }`}
+            >
+              <a.icon className="w-4 h-4 shrink-0" />
+              {a.label}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function QuoteDetailPage({
   params,
 }: {
   params: Promise<{ id: string }>;
 }) {
   const { id } = use(params);
+  // 되돌리기 확인: 지워지는 값을 나열한 뒤 실행
+  const [revertConfirm, setRevertConfirm] = useState<{ title: string; lines: string[]; run: () => void } | null>(null);
+  const askRevert = (title: string, lines: string[], run: () => void) => setRevertConfirm({ title, lines, run });
   const [quote, setQuote] = useState<QuoteDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState(false);
@@ -326,6 +399,24 @@ export default function QuoteDetailPage({
         setLoading(false);
       });
   }, [id]);
+
+  // dev가 대기중 견적을 열면 자동으로 검토중 전환 ("검토 시작" 클릭 제거)
+  const autoReviewTried = useRef(false);
+  useEffect(() => {
+    // 사업팀 요청 건만 — 개발팀이 직접 작성한 대기 견적(고객 회신 대기)은 건드리지 않는다
+    if (!isDev || quote?.status !== "pending" || quote.createdBy?.role !== "sales" || autoReviewTried.current) return;
+    autoReviewTried.current = true;
+    fetch(`/api/quotes/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ status: "reviewing" }),
+    })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (data) setQuote((prev) => (prev ? { ...prev, ...data, comments: prev.comments } : prev));
+      })
+      .catch(() => {});
+  }, [isDev, quote?.status, quote?.createdBy?.role, id]);
 
   // 편집 모드 진입 시 참고 견적 시세(baseline) 로드 — dev 전용
   useEffect(() => {
@@ -603,6 +694,10 @@ export default function QuoteDetailPage({
   const editTotal = editSubtotal + editVat;
 
   const canAct = user?.role === "sales" || user?.role === "dev";
+  const nextAction = getNextAction(
+    { ...quote, lastCommentRole: comments[comments.length - 1]?.user?.role ?? null, createdByRole: quote.createdBy?.role ?? null },
+    todayStr()
+  );
   const showActionBar =
     !editing &&
     ((isDev && (quote.status === "pending" || quote.status === "reviewing")) ||
@@ -647,6 +742,8 @@ export default function QuoteDetailPage({
           </div>
         </div>
         <div className="flex items-center gap-2 shrink-0">
+          {/* 견적서는 금액 문서 — 금액 비노출 role(dev_staff)에게는 숨김 (API도 403) */}
+          {showPrice && (
           <button
             onClick={async () => {
               try {
@@ -677,6 +774,7 @@ export default function QuoteDetailPage({
             <Download className="w-4 h-4" />
             <span className="hidden sm:inline">Excel </span>다운로드
           </button>
+          )}
         </div>
       </div>
 
@@ -1192,19 +1290,26 @@ export default function QuoteDetailPage({
                           {p.value ? (
                             <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-emerald-100 text-emerald-700 font-medium whitespace-nowrap">입금</span>
                           ) : (() => {
-                            // 정확한 입금일 미상 시 행사 종료일을 기본값으로 원클릭 기록
-                            const endDate = quote.confirmedEndDate || quote.eventEndDate;
-                            return endDate ? (
-                              <button
-                                onClick={() => updatePayment(p.field, endDate)}
-                                disabled={saving}
-                                className="text-[10px] px-1.5 py-0.5 rounded-full border border-emerald-300 text-emerald-700 bg-white hover:bg-emerald-50 disabled:opacity-50 whitespace-nowrap transition-colors"
-                                title={`행사 종료일(${endDate})로 입금 처리`}
-                              >
-                                종료일로 기록
-                              </button>
-                            ) : (
+                            // 월 단위 정산 — 행사 종료 달 말일 / 다음 달 말일로 원클릭 기록
+                            const base = settlementBaseDate(quote);
+                            if (!base) return (
                               <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-gray-100 text-gray-500 whitespace-nowrap">미기록</span>
+                            );
+                            const { thisMonthEnd, nextMonthEnd } = settlementDates(base);
+                            return (
+                              <span className="flex gap-1">
+                                {[thisMonthEnd, nextMonthEnd].map((d) => (
+                                  <button
+                                    key={d}
+                                    onClick={() => updatePayment(p.field, d)}
+                                    disabled={saving}
+                                    className="text-[10px] px-1.5 py-0.5 rounded-full border border-emerald-300 text-emerald-700 bg-white hover:bg-emerald-50 disabled:opacity-50 whitespace-nowrap transition-colors"
+                                    title={`${d} 입금으로 기록 (${d === thisMonthEnd ? "행사 종료 달" : "다음 달"} 말일)`}
+                                  >
+                                    {Number(d.slice(5, 7))}/{Number(d.slice(8, 10))}
+                                  </button>
+                                ))}
+                              </span>
                             );
                           })()}
                         </div>
@@ -1397,188 +1502,174 @@ export default function QuoteDetailPage({
                   </>
                 )}
               </span>
-              {quote.status === "approved" && (
-                <span className="hidden lg:inline text-amber-700">
-                  클라이언트 확인 후 확정 또는 미진행을 선택해주세요
+              {nextAction.label && (
+                <span
+                  className={`hidden md:inline truncate ${nextAction.tone === "warn" ? "text-amber-700 font-medium" : "text-gray-600"}`}
+                >
+                  {nextAction.actor ? `${ACTOR_LABELS[nextAction.actor]} 차례 · ` : ""}
+                  {nextAction.label}
                 </span>
               )}
             </div>
 
-            {isDev && quote.status === "pending" && (
-              <button
-                onClick={() => updateStatus("reviewing")}
-                disabled={saving}
-                className="flex items-center gap-1.5 px-5 py-2.5 text-sm font-medium bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors"
-              >
-                {saving && <Loader2 className="w-4 h-4 animate-spin" />}
-                검토 시작
-              </button>
-            )}
+            {/* 단계별 주요 행동 1개 + 더보기. 되돌리기·이탈 행동은 더보기 안에 둔다 */}
+            {(() => {
+              const btn = "flex items-center gap-1.5 px-5 py-2.5 text-sm font-medium text-white rounded-lg disabled:opacity-50 transition-colors";
+              const more: MoreAction[] = [];
+              let primary: React.ReactNode = null;
 
-            {isDev && quote.status === "reviewing" && (
-              <>
-                <button
-                  onClick={() => setShowRejectModal(true)}
-                  disabled={saving}
-                  className="flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium text-red-600 border border-red-200 bg-white rounded-lg hover:bg-red-50 disabled:opacity-50 transition-colors"
-                >
-                  <XCircle className="w-4 h-4" />
-                  반려
-                </button>
-                <button
-                  onClick={() => updateStatus("approved")}
-                  disabled={saving}
-                  className="flex items-center gap-1.5 px-6 py-2.5 text-sm font-medium bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors"
-                >
-                  {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle className="w-4 h-4" />}
-                  승인
-                </button>
-              </>
-            )}
-
-            {quote.status === "approved" && canAct && (
-              <>
-                {isDev && (
-                  <button
-                    onClick={() => updateStatus("reviewing")}
-                    disabled={saving}
-                    className="flex items-center gap-1.5 px-3 py-2.5 text-sm text-amber-700 rounded-lg hover:bg-amber-50 disabled:opacity-50 transition-colors"
-                  >
-                    <RotateCcw className="w-4 h-4" />
-                    <span className="hidden sm:inline">승인 철회</span>
+              if (quote.status === "pending" && isDev) {
+                primary = (
+                  <button onClick={() => updateStatus("reviewing")} disabled={saving} className={`${btn} bg-blue-600 hover:bg-blue-700`}>
+                    {saving && <Loader2 className="w-4 h-4 animate-spin" />}
+                    검토 시작
                   </button>
-                )}
-                {user?.role === "sales" && (
-                  <button
-                    onClick={() => { setRevisionReasonInput(""); setShowRevisionModal(true); }}
-                    disabled={saving}
-                    className="flex items-center gap-1.5 px-3 py-2.5 text-sm text-amber-700 border border-amber-200 bg-white rounded-lg hover:bg-amber-50 disabled:opacity-50 transition-colors"
-                  >
-                    <RotateCcw className="w-4 h-4" />
-                    수정 요청
-                  </button>
-                )}
-                <button
-                  onClick={() => { setHoldReasonInput(""); setShowHoldModal(true); }}
-                  disabled={saving}
-                  className="flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium text-sky-700 border border-sky-200 bg-white rounded-lg hover:bg-sky-50 disabled:opacity-50 transition-colors"
-                >
-                  <PauseCircle className="w-4 h-4" />
-                  보류
-                </button>
-                <button
-                  onClick={() => setShowLostModal(true)}
-                  disabled={saving}
-                  className="flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium text-gray-600 border rounded-lg bg-white hover:bg-gray-50 disabled:opacity-50 transition-colors"
-                >
-                  <Ban className="w-4 h-4" />
-                  미진행
-                </button>
-                <button
-                  onClick={openConfirmModal}
-                  disabled={saving}
-                  className="flex items-center gap-1.5 px-5 py-2.5 text-sm font-medium bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 disabled:opacity-50 transition-colors"
-                >
-                  <CalendarCheck className="w-4 h-4" />
-                  행사 확정
-                </button>
-              </>
-            )}
+                );
+              }
 
-            {quote.status === "on_hold" && canAct && (
-              <>
-                <button
-                  onClick={() => setShowLostModal(true)}
-                  disabled={saving}
-                  className="flex items-center gap-1.5 px-3 py-2.5 text-sm text-gray-500 rounded-lg hover:bg-gray-50 disabled:opacity-50 transition-colors"
-                >
-                  <Ban className="w-4 h-4" />
-                  미진행
-                </button>
-                <button
-                  onClick={() => updateStatus("approved")}
-                  disabled={saving}
-                  className="flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium text-sky-700 border border-sky-200 bg-white rounded-lg hover:bg-sky-50 disabled:opacity-50 transition-colors"
-                >
-                  <PlayCircle className="w-4 h-4" />
-                  재개 (확정 대기로)
-                </button>
-                <button
-                  onClick={openConfirmModal}
-                  disabled={saving}
-                  className="flex items-center gap-1.5 px-5 py-2.5 text-sm font-medium bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 disabled:opacity-50 transition-colors"
-                >
-                  <CalendarCheck className="w-4 h-4" />
-                  행사 확정
-                </button>
-              </>
-            )}
-
-            {quote.status === "confirmed" && canAct && (
-              <>
-                {/* 외주는 되돌리기 숨김 — 오클릭 시 confirmedDate/devDeadline 초기화로 매출 인식이 사라짐 */}
-                {!quote.isExternal && (
-                  <button
-                    onClick={() => updateStatus("approved")}
-                    disabled={saving}
-                    className="flex items-center gap-1.5 px-3 py-2.5 text-sm text-amber-700 rounded-lg hover:bg-amber-50 disabled:opacity-50 transition-colors"
-                  >
-                    <RotateCcw className="w-4 h-4" />
-                    <span className="hidden sm:inline">승인으로 되돌리기</span>
-                  </button>
-                )}
-                {isDev && !quote.devCompletedAt && (
-                  <button
-                    onClick={() => updateDevCompleted(true)}
-                    disabled={saving}
-                    className="flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors"
-                  >
+              if (quote.status === "reviewing" && isDev) {
+                primary = (
+                  <button onClick={() => updateStatus("approved")} disabled={saving} className={`${btn} bg-blue-600 hover:bg-blue-700`}>
                     {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle className="w-4 h-4" />}
-                    개발 완료
+                    승인
                   </button>
-                )}
-                {isDev && quote.devCompletedAt && (
-                  <button
-                    onClick={() => updateDevCompleted(false)}
-                    disabled={saving}
-                    className="flex items-center gap-1.5 px-3 py-2.5 text-sm text-gray-500 rounded-lg hover:bg-gray-50 disabled:opacity-50 transition-colors"
-                  >
-                    <RotateCcw className="w-4 h-4" />
-                    <span className="hidden sm:inline">개발 완료 취소</span>
+                );
+                more.push({ label: "반려", icon: XCircle, danger: true, run: () => setShowRejectModal(true) });
+              }
+
+              if (quote.status === "approved" && canAct) {
+                primary = (
+                  <button onClick={openConfirmModal} disabled={saving} className={`${btn} bg-emerald-600 hover:bg-emerald-700`}>
+                    <CalendarCheck className="w-4 h-4" />
+                    행사 확정
                   </button>
-                )}
-                <button
-                  onClick={() => updateStatus("completed")}
-                  disabled={saving}
-                  className="flex items-center gap-1.5 px-5 py-2.5 text-sm font-medium bg-slate-700 text-white rounded-lg hover:bg-slate-800 disabled:opacity-50 transition-colors"
-                >
-                  <CheckCheck className="w-4 h-4" />
-                  {quote.isExternal ? "완료 처리" : "행사 완료 처리"}
-                </button>
-              </>
-            )}
+                );
+                more.push({ label: "보류", icon: PauseCircle, run: () => { setHoldReasonInput(""); setShowHoldModal(true); } });
+                more.push({ label: "미진행", icon: Ban, run: () => setShowLostModal(true) });
+                if (user?.role === "sales") {
+                  more.push({ label: "수정 요청", icon: RotateCcw, run: () => { setRevisionReasonInput(""); setShowRevisionModal(true); } });
+                }
+                if (isDev) {
+                  more.push({
+                    label: "승인 철회",
+                    icon: RotateCcw,
+                    danger: true,
+                    run: () => askRevert("승인을 철회할까요?", ["검토중으로 돌아갑니다", "다시 승인하면 승인 메일이 한 번 더 발송됩니다"], () => updateStatus("reviewing")),
+                  });
+                }
+              }
 
-            {quote.status === "completed" && canAct && (
-              <button
-                onClick={() => updateStatus("confirmed")}
-                disabled={saving}
-                className="flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium text-emerald-700 border border-emerald-200 bg-white rounded-lg hover:bg-emerald-50 disabled:opacity-50 transition-colors"
-              >
-                <RotateCcw className="w-4 h-4" />
-                확정 상태로 되돌리기
-              </button>
-            )}
+              if (quote.status === "on_hold" && canAct) {
+                primary = (
+                  <button onClick={openConfirmModal} disabled={saving} className={`${btn} bg-emerald-600 hover:bg-emerald-700`}>
+                    <CalendarCheck className="w-4 h-4" />
+                    행사 확정
+                  </button>
+                );
+                more.push({ label: "재개 (확정 대기로)", icon: PlayCircle, run: () => updateStatus("approved") });
+                more.push({ label: "미진행", icon: Ban, run: () => setShowLostModal(true) });
+              }
 
-            {quote.status === "lost" && canAct && (
-              <button
-                onClick={() => updateStatus("approved")}
-                disabled={saving}
-                className="flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium bg-amber-600 text-white rounded-lg hover:bg-amber-700 disabled:opacity-50 transition-colors"
-              >
-                <RotateCcw className="w-4 h-4" />
-                승인 상태로 되돌리기
+              if (quote.status === "confirmed" && canAct) {
+                const eventEnded = !!quote.confirmedEndDate && quote.confirmedEndDate < todayStr();
+                const completeBtn = (
+                  <button onClick={() => updateStatus("completed")} disabled={saving} className={`${btn} bg-slate-700 hover:bg-slate-800`}>
+                    <CheckCheck className="w-4 h-4" />
+                    {quote.isExternal ? "완료 처리" : "행사 완료 처리"}
+                  </button>
+                );
+                // 미배포이고 행사가 아직 안 끝났으면 개발 완료가 주요 행동
+                if (isDev && !quote.devCompletedAt && !eventEnded) {
+                  primary = (
+                    <button onClick={() => updateDevCompleted(true)} disabled={saving} className={`${btn} bg-blue-600 hover:bg-blue-700`}>
+                      {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle className="w-4 h-4" />}
+                      개발 완료
+                    </button>
+                  );
+                  more.push({ label: quote.isExternal ? "완료 처리" : "행사 완료 처리", icon: CheckCheck, run: () => updateStatus("completed") });
+                } else {
+                  primary = completeBtn;
+                  if (isDev && !quote.devCompletedAt) {
+                    more.push({ label: "개발 완료 기록", icon: CheckCircle, run: () => updateDevCompleted(true) });
+                  }
+                }
+                if (isDev && quote.devCompletedAt) {
+                  more.push({ label: "개발 완료 취소", icon: RotateCcw, run: () => updateDevCompleted(false) });
+                }
+                // 외주는 되돌리기 숨김 — 오클릭 시 confirmedDate/devDeadline 초기화로 매출 인식이 사라짐
+                if (!quote.isExternal) {
+                  more.push({
+                    label: "승인으로 되돌리기",
+                    icon: RotateCcw,
+                    danger: true,
+                    run: () =>
+                      askRevert(
+                        "확정을 취소하고 승인 상태로 되돌릴까요?",
+                        [
+                          `행사일 ${quote.confirmedDate || "-"}${quote.confirmedEndDate ? ` ~ ${quote.confirmedEndDate}` : ""} 기록이 지워집니다`,
+                          `개발 마감 ${quote.devDeadline || "-"} 기록이 지워집니다`,
+                          ...(quote.devCompletedAt ? ["개발 완료(배포) 기록이 지워집니다"] : []),
+                        ],
+                        () => updateStatus("approved")
+                      ),
+                  });
+                }
+              }
+
+              if (quote.status === "completed" && canAct) {
+                more.push({ label: "확정 상태로 되돌리기", icon: RotateCcw, run: () => updateStatus("confirmed") });
+              }
+
+              if (quote.status === "lost" && canAct) {
+                more.push({
+                  label: "승인 상태로 되돌리기",
+                  icon: RotateCcw,
+                  run: () =>
+                    askRevert(
+                      "미진행을 취소하고 승인 상태로 되돌릴까요?",
+                      [`미진행 사유${quote.lostReason ? ` "${quote.lostReason}"` : ""}가 지워집니다`],
+                      () => updateStatus("approved")
+                    ),
+                });
+              }
+
+              return (
+                <>
+                  {more.length > 0 && <MoreMenu actions={more} disabled={saving} />}
+                  {primary}
+                </>
+              );
+            })()}
+          </div>
+        </div>
+      )}
+
+      {/* 되돌리기 확인 모달 — 지워지는 값을 보여준 뒤 실행 */}
+      {revertConfirm && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={() => setRevertConfirm(null)} onKeyDown={(e) => { if (e.key === "Escape") setRevertConfirm(null); }}>
+          <div className="bg-white rounded-2xl p-6 max-w-sm w-full" role="dialog" aria-modal="true" aria-labelledby="revert-title" onClick={(e) => e.stopPropagation()}>
+            <h3 id="revert-title" className="text-lg font-semibold mb-3">{revertConfirm.title}</h3>
+            <ul className="text-sm text-gray-600 space-y-1 mb-6 list-disc pl-5">
+              {revertConfirm.lines.map((l) => (
+                <li key={l}>{l}</li>
+              ))}
+            </ul>
+            <div className="flex gap-2 justify-end">
+              <button onClick={() => setRevertConfirm(null)} className="px-4 py-2 text-sm border rounded-lg hover:bg-gray-50" autoFocus>
+                취소
               </button>
-            )}
+              <button
+                onClick={() => {
+                  const run = revertConfirm.run;
+                  setRevertConfirm(null);
+                  run();
+                }}
+                disabled={saving}
+                className="px-4 py-2 text-sm font-medium bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50"
+              >
+                되돌리기
+              </button>
+            </div>
           </div>
         </div>
       )}

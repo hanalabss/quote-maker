@@ -117,5 +117,20 @@ test("deriveSelection — 화면 구성 없이 모듈로 켠 선택 인쇄는 �
 test("toggleModuleCode — 화면 흐름 모듈을 켜면 UI·SDK 자동, 끌 때는 그대로", () => {
   assert.deepEqual(toggleModuleCode([], "CAM_PHOTO"), ["CAM_PHOTO", "PRINT_SDK", "UI_BASIC"]);
   assert.deepEqual(toggleModuleCode(["CAM_PHOTO", "PRINT_SDK", "UI_BASIC"], "CAM_PHOTO"), ["PRINT_SDK", "UI_BASIC"]);
-  assert.deepEqual(toggleModuleCode([], "KSNET_PAY"), ["KSNET_PAY"]);
+  // 결제도 화면 기능 — UI 자동 추가, 프린터 연동은 추가하지 않음
+  assert.deepEqual(toggleModuleCode([], "KSNET_PAY"), ["KSNET_PAY", "UI_BASIC"]);
+});
+
+test("AI 두 항목은 둘 중 하나 — 한쪽을 켜면 다른 쪽은 꺼진다", () => {
+  // AI_FEE는 화면 기능이 아니라 UI 자동 추가 없음, AI_STYLE은 화면 기능이라 UI 자동 추가
+  assert.deepEqual(toggleModuleCode(["UI_BASIC", "AI_STYLE"], "AI_FEE"), ["UI_BASIC", "AI_FEE"]);
+  assert.deepEqual(toggleModuleCode(["CAM_PHOTO", "UI_BASIC", "AI_FEE"], "AI_STYLE"), ["CAM_PHOTO", "UI_BASIC", "AI_STYLE"]);
+  assert.deepEqual(toggleModuleCode(["AI_FEE"], "AI_STYLE"), ["AI_STYLE", "UI_BASIC"]);
+  assert.deepEqual(toggleModuleCode(["AI_STYLE"], "AI_STYLE"), []);
+});
+
+test("화면이 있는 기능을 켜면 UI 개발 자동 추가, 인쇄 없는 기능은 프린터 연동은 추가하지 않음", () => {
+  assert.deepEqual(toggleModuleCode([], "QUIZ_SURVEY"), ["QUIZ_SURVEY", "UI_BASIC"]);
+  assert.deepEqual(toggleModuleCode(["UI_BASIC"], "RANDOM_DRAW"), ["UI_BASIC", "RANDOM_DRAW"]);
+  assert.deepEqual(toggleModuleCode([], "LIVE_DASHBOARD"), ["LIVE_DASHBOARD"]);
 });

@@ -9,7 +9,8 @@ export default async function CalendarPage() {
   if (!user) redirect("/login");
 
   const where: Record<string, unknown> = {
-    status: "confirmed",
+    // 확정 + 완료(지난 행사도 달력에 남김)
+    status: { in: ["confirmed", "completed"] },
     type: { not: "sale" }, // 판매 유형 제외 (행사 아님)
   };
   // 외주는 dev만 (dev 달력에는 행사형 외주가 있으면 표시)
@@ -33,6 +34,8 @@ export default async function CalendarPage() {
       eventDate: true,
       eventEndDate: true,
       devDeadline: true,
+      devCompletedAt: true,
+      status: true,
       createdBy: { select: { name: true } },
     },
     orderBy: { confirmedDate: "asc" },
@@ -48,6 +51,8 @@ export default async function CalendarPage() {
       confirmedDate: q.confirmedDate || q.eventDate!,
       eventEndDate: q.confirmedEndDate || q.eventEndDate,
       devDeadline: q.devDeadline,
+      devCompletedAt: q.devCompletedAt?.toISOString() ?? null,
+      status: q.status,
       createdByName: q.createdBy?.name || null,
     }));
 
