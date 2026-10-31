@@ -4,6 +4,9 @@ import { useState, useEffect, useRef } from "react";
 import { ArrowLeft, ArrowRight, Check, Send, Loader2, Paperclip, X, FileText, Image, Music } from "lucide-react";
 import Link from "next/link";
 import { formatKRW, applyPriceRate } from "@/lib/pricing";
+import { ModuleGuideText } from "@/components/ModuleGuideText";
+import { GUIDE_GROUPS, guideGroupOf } from "@/lib/moduleGuide";
+import { toggleModuleCode } from "@/lib/requestItems";
 import type { QuoteType } from "@/types";
 import { TYPE_LABELS, TYPE_PRICE_RATE } from "@/types";
 
@@ -64,10 +67,6 @@ const QUOTE_TYPES: { value: QuoteType; label: string; description: string; color
 const KSNET_PRICE = 300000;
 const SELECT_PRINT_PRICE = 150000;
 const DRAFT_KEY = "qm-request-draft";
-
-// 이 모듈 중 하나라도 선택되면 PRINT_SDK·UI_BASIC 자동 선택
-const PRINT_SDK_TRIGGERS = ["CAM_PHOTO", "QR_UPLOAD", "TEXT_INPUT", "SELECT_PRINT"];
-const UI_BASIC_TRIGGERS = PRINT_SDK_TRIGGERS;
 
 interface Attachment {
   fileName: string;
@@ -216,25 +215,9 @@ export default function RequestPage() {
     setForm((prev) => ({ ...prev, [key]: value }));
   }
 
+  // 선택 규칙(PRINT_SDK·UI_BASIC 자동 추가, AI 둘 중 하나)은 기능 수정 모달과 공용 — lib/requestItems
   function toggleModule(code: string) {
-    setForm((prev) => {
-      const isSelected = prev.selectedModules.includes(code);
-      let next = isSelected
-        ? prev.selectedModules.filter((c) => c !== code)
-        : [...prev.selectedModules, code];
-
-      // 트리거 모듈을 켤 때 PRINT_SDK 자동 추가
-      if (!isSelected && PRINT_SDK_TRIGGERS.includes(code) && !next.includes("PRINT_SDK")) {
-        next = [...next, "PRINT_SDK"];
-      }
-
-      // 화면 흐름 모듈을 켤 때 UI_BASIC 자동 추가 (견적에서 UI 개발 누락 방지)
-      if (!isSelected && UI_BASIC_TRIGGERS.includes(code) && !next.includes("UI_BASIC")) {
-        next = [...next, "UI_BASIC"];
-      }
-
-      return { ...prev, selectedModules: next };
-    });
+    setForm((prev) => ({ ...prev, selectedModules: toggleModuleCode(prev.selectedModules, code) }));
   }
 
   function toggleScreen(value: string) {
@@ -614,78 +597,92 @@ export default function RequestPage() {
                 </span>
               </div>
               <p className="text-sm text-gray-500 mb-6">
-                선택할 때마다 견적 요약이 바로 갱신됩니다. 테스트 및 유지보수는 자동 포함되며, 확실하지
-                않은 기능은 비워두고 기타 요청사항에 적어주세요.
+                방문객이 키오스크에서 하는 일을 떠올리며 골라 주세요. 선택할 때마다 오른쪽 견적이 바로 바뀌고,
+                화면·프린터처럼 꼭 필요한 항목은 자동으로 함께 선택됩니다. 잘 모르겠는 기능은 비워 두고 기타 요청사항에 적어 주세요.
               </p>
-              <div className="grid sm:grid-cols-2 gap-3">
-                {modules
-                  .filter((m) => !m.isAutoIncluded)
-                  .map((mod) => {
-                    const selected = form.selectedModules.includes(mod.code);
-                    const isNegotiable = mod.code === "AI_STYLE" && mod.basePrice === 0;
-                    return (
-                      <button
-                        key={mod.code}
-                        onClick={() => toggleModule(mod.code)}
-                        aria-pressed={selected}
-                        className={`text-left p-3.5 rounded-xl border-2 transition-all flex items-start gap-2.5 ${
-                          selected
-                            ? "border-blue-500 bg-blue-50"
-                            : "border-gray-200 hover:border-blue-300 bg-white"
-                        }`}
-                      >
-                        <div
-                          className={`w-5 h-5 rounded border-2 flex items-center justify-center shrink-0 mt-0.5 ${
-                            selected ? "bg-blue-600 border-blue-600" : "border-gray-300"
-                          }`}
-                          aria-hidden="true"
-                        >
-                          {selected && <Check className="w-3 h-3 text-white" />}
-                        </div>
-                        <div className="min-w-0">
-                          <div className="text-sm font-semibold">{mod.name}</div>
-                          {mod.description && (
-                            <p className="text-xs text-gray-500 mt-0.5 leading-snug">{mod.description}</p>
-                          )}
-                          <div
-                            className={`text-xs font-semibold mt-1.5 tabular-nums ${
-                              isNegotiable ? "text-orange-600" : "text-blue-700"
-                            }`}
-                          >
-                            {isNegotiable ? "협의" : `+${formatKRW(applyPriceRate(mod.basePrice, priceRate))}원`}
-                          </div>
-                        </div>
-                      </button>
-                    );
-                  })}
-
-                {/* 자동 포함 항목 */}
-                {modules
-                  .filter((m) => m.isAutoIncluded)
-                  .map((mod) => (
-                    <div
-                      key={mod.code}
-                      className="p-3.5 rounded-xl border-2 border-dashed border-green-300 bg-green-50 flex items-start gap-2.5"
-                    >
-                      <div className="w-5 h-5 rounded bg-green-600 border-2 border-green-600 flex items-center justify-center shrink-0 mt-0.5">
-                        <Check className="w-3 h-3 text-white" />
-                      </div>
-                      <div className="min-w-0">
-                        <div className="text-sm font-semibold flex items-center gap-1.5 flex-wrap">
-                          {mod.name}
-                          <span className="text-[11px] bg-green-200 text-green-700 px-1.5 py-0.5 rounded-full font-medium">
-                            자동 포함
+              <div className="space-y-7">
+                {GUIDE_GROUPS.map((g) => {
+                  const groupMods = modules.filter((m) => guideGroupOf(m.code) === g.key);
+                  if (groupMods.length === 0) return null;
+                  const pickedCount = groupMods.filter((m) => !m.isAutoIncluded && form.selectedModules.includes(m.code)).length;
+                  return (
+                    <section key={g.key} aria-labelledby={`group-${g.key}`}>
+                      <div className="flex items-baseline gap-2 mb-2.5 flex-wrap">
+                        <h3 id={`group-${g.key}`} className="text-sm font-semibold text-gray-900">{g.label}</h3>
+                        {g.hint && <span className="text-xs text-gray-500">{g.hint}</span>}
+                        {pickedCount > 0 && (
+                          <span className="text-[11px] px-1.5 py-0.5 rounded-full bg-blue-100 text-blue-700 font-medium">
+                            {pickedCount}개 선택
                           </span>
-                        </div>
-                        {mod.description && (
-                          <p className="text-xs text-gray-500 mt-0.5 leading-snug">{mod.description}</p>
                         )}
-                        <div className="text-xs font-semibold mt-1.5 text-green-700 tabular-nums">
-                          +{formatKRW(applyPriceRate(mod.basePrice, priceRate))}원
-                        </div>
                       </div>
-                    </div>
-                  ))}
+                      <div className="grid sm:grid-cols-2 gap-3">
+                        {groupMods.map((mod) => {
+                          if (mod.isAutoIncluded) {
+                            return (
+                              <div
+                                key={mod.code}
+                                className="p-3.5 rounded-xl border-2 border-dashed border-green-300 bg-green-50 flex items-start gap-2.5"
+                              >
+                                <div className="w-5 h-5 rounded bg-green-600 border-2 border-green-600 flex items-center justify-center shrink-0 mt-0.5">
+                                  <Check className="w-3 h-3 text-white" />
+                                </div>
+                                <div className="min-w-0">
+                                  <ModuleGuideText
+                                    code={mod.code}
+                                    name={mod.name}
+                                    description={mod.description}
+                                    badge={
+                                      <span className="text-[11px] bg-green-200 text-green-700 px-1.5 py-0.5 rounded-full font-medium">
+                                        자동 포함
+                                      </span>
+                                    }
+                                  />
+                                  <div className="text-xs font-semibold mt-1.5 text-green-700 tabular-nums">
+                                    +{formatKRW(applyPriceRate(mod.basePrice, priceRate))}원
+                                  </div>
+                                </div>
+                              </div>
+                            );
+                          }
+                          const selected = form.selectedModules.includes(mod.code);
+                          const isNegotiable = mod.code === "AI_STYLE" && mod.basePrice === 0;
+                          return (
+                            <button
+                              key={mod.code}
+                              onClick={() => toggleModule(mod.code)}
+                              aria-pressed={selected}
+                              className={`text-left p-3.5 rounded-xl border-2 transition-all flex items-start gap-2.5 ${
+                                selected
+                                  ? "border-blue-500 bg-blue-50"
+                                  : "border-gray-200 hover:border-blue-300 bg-white"
+                              }`}
+                            >
+                              <div
+                                className={`w-5 h-5 rounded border-2 flex items-center justify-center shrink-0 mt-0.5 ${
+                                  selected ? "bg-blue-600 border-blue-600" : "border-gray-300"
+                                }`}
+                                aria-hidden="true"
+                              >
+                                {selected && <Check className="w-3 h-3 text-white" />}
+                              </div>
+                              <div className="min-w-0">
+                                <ModuleGuideText code={mod.code} name={mod.name} description={mod.description} />
+                                <div
+                                  className={`text-xs font-semibold mt-1.5 tabular-nums ${
+                                    isNegotiable ? "text-orange-600" : "text-blue-700"
+                                  }`}
+                                >
+                                  {isNegotiable ? "협의" : `+${formatKRW(applyPriceRate(mod.basePrice, priceRate))}원`}
+                                </div>
+                              </div>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </section>
+                  );
+                })}
               </div>
 
               {/* 소계 (모바일/태블릿 — 데스크톱은 우측 요약 패널) */}

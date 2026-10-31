@@ -1,8 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
-import { FileText, Package, UserCircle, CalendarDays, BarChart3 } from "lucide-react";
+import { usePathname, useRouter } from "next/navigation";
+import { FileText, Package, UserCircle, CalendarDays, BarChart3, Inbox, LogOut } from "lucide-react";
 
 export function DashboardShell({
   isDev,
@@ -12,6 +12,7 @@ export function DashboardShell({
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
+  const router = useRouter();
 
   const navLinkClass = (href: string) => {
     const isActive = pathname.startsWith(href);
@@ -37,6 +38,14 @@ export function DashboardShell({
               QM
             </Link>
             <nav className="flex items-center gap-0.5 sm:gap-1 flex-wrap" aria-label="주요 메뉴">
+              <Link
+                href="/dashboard/home"
+                className={navLinkClass("/dashboard/home")}
+                aria-current={pathname.startsWith("/dashboard/home") ? "page" : undefined}
+              >
+                <Inbox className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                내 차례
+              </Link>
               <Link
                 href="/dashboard/quotes"
                 className={navLinkClass("/dashboard/quotes")}
@@ -83,6 +92,18 @@ export function DashboardShell({
             >
               <UserCircle className="w-5 h-5" />
             </Link>
+            <button
+              type="button"
+              onClick={async () => {
+                await fetch("/api/auth/logout", { method: "POST" });
+                router.push("/login");
+              }}
+              className="p-1.5 sm:p-2 rounded-lg hover:bg-gray-100 text-gray-500 hover:text-red-600 transition-colors"
+              aria-label="로그아웃"
+              title="로그아웃"
+            >
+              <LogOut className="w-5 h-5" />
+            </button>
             <Link
               href="/request"
               className="text-xs sm:text-sm px-2.5 sm:px-4 py-1.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"

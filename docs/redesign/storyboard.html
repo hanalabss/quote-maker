@@ -1,0 +1,402 @@
+<title>QuoteMaker 리디자인 스토리보드</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@500;600;700&family=Noto+Sans+KR:wght@400;500;700&family=JetBrains+Mono:wght@500&display=swap">
+<style>
+/* Layout: 문서형 단일 컬럼 + 장면마다 "현재 → 바뀐 화면" 2단, 와이어프레임은 실제 견적 화면 축소판 */
+:root {
+  --bg: #f6f7fa;
+  --surface: #ffffff;
+  --ink: #141a26;
+  --muted: #5d6676;
+  --line: #dde1e8;
+  --wire: #eef1f6;
+  --accent: #2563eb;
+  --accent-soft: #e6eefe;
+  --sales: #c2410c;
+  --sales-soft: #fdeee4;
+  --dev: #0f766e;
+  --dev-soft: #ddf3ef;
+  --warn: #b45309;
+  --warn-soft: #fdf2dc;
+  --bad: #b91c1c;
+  --bad-soft: #fde6e6;
+  --font-display: "IBM Plex Sans KR", "Noto Sans KR", "Malgun Gothic", sans-serif;
+  --font-body: "Noto Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #10141c; --surface: #171d28; --ink: #e8ebf1; --muted: #9aa3b3; --line: #2a3242; --wire: #202836;
+  --accent: #7aa7ff; --accent-soft: #1d2b4a; --sales: #f59e6b; --sales-soft: #3a2418; --dev: #5fd1c1; --dev-soft: #14322f;
+  --warn: #f2b45a; --warn-soft: #3a2c12; --bad: #f58a8a; --bad-soft: #3a1a1a; color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #10141c; --surface: #171d28; --ink: #e8ebf1; --muted: #9aa3b3; --line: #2a3242; --wire: #202836;
+  --accent: #7aa7ff; --accent-soft: #1d2b4a; --sales: #f59e6b; --sales-soft: #3a2418; --dev: #5fd1c1; --dev-soft: #14322f;
+  --warn: #f2b45a; --warn-soft: #3a2c12; --bad: #f58a8a; --bad-soft: #3a1a1a; color-scheme: dark }
+
+* { box-sizing: border-box }
+body { background: var(--bg); color: var(--ink); font-family: var(--font-body); font-size: 15px; line-height: 1.65 }
+.wrap { max-width: 1080px; margin: 0 auto; padding-block: 40px 80px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)) }
+h1, h2, h3 { font-family: var(--font-display); text-wrap: balance; line-height: 1.3; margin: 0 }
+h1 { font-size: clamp(26px, 4vw, 36px); font-weight: 700 }
+h2 { font-size: 22px; font-weight: 700 }
+h3 { font-size: 16px; font-weight: 600 }
+p { margin: 0 }
+.lede { color: var(--muted); max-width: 62ch; margin-top: 10px }
+.eyebrow { font-size: 12px; letter-spacing: .06em; color: var(--muted); font-weight: 500 }
+section { margin-top: 56px; display: grid; gap: 20px }
+.mono { font-family: var(--font-mono); font-size: 12px }
+.num { font-variant-numeric: tabular-nums }
+
+nav.toc { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 20px }
+nav.toc a { color: var(--ink); text-decoration: none; font-size: 13px; padding: 4px 10px; border: 1px solid var(--line); border-radius: 999px; background: var(--surface) }
+nav.toc a:hover, nav.toc a:focus-visible { border-color: var(--accent); color: var(--accent); outline: none }
+
+.facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; margin-top: 24px }
+.fact { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; display: grid; gap: 2px }
+.fact b { font-family: var(--font-display); font-size: 24px; font-variant-numeric: tabular-nums }
+.fact span { color: var(--muted); font-size: 13px }
+
+.chip { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; font-weight: 500; padding: 1px 8px; border-radius: 999px; white-space: nowrap }
+.chip.sales { background: var(--sales-soft); color: var(--sales) }
+.chip.dev { background: var(--dev-soft); color: var(--dev) }
+.chip.acc { background: var(--accent-soft); color: var(--accent) }
+.chip.warn { background: var(--warn-soft); color: var(--warn) }
+.chip.bad { background: var(--bad-soft); color: var(--bad) }
+.chip.plain { background: var(--wire); color: var(--muted) }
+
+/* personas */
+.personas { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 12px }
+.persona { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 18px; display: grid; gap: 10px; align-content: start }
+.persona header { display: flex; justify-content: space-between; gap: 8px; align-items: baseline; flex-wrap: wrap }
+.persona .goal { font-size: 14px }
+.persona ul { margin: 0; padding-left: 18px; color: var(--muted); font-size: 13.5px; display: grid; gap: 2px }
+.persona .need { font-size: 13.5px; border-top: 1px dashed var(--line); padding-top: 8px }
+.persona .need b { color: var(--accent); font-weight: 500 }
+
+/* scenes */
+.scene { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 20px; display: grid; gap: 16px }
+.scene-head { display: flex; gap: 12px; align-items: baseline; flex-wrap: wrap }
+.scene-head .step { font-family: var(--font-mono); font-size: 13px; color: var(--accent) }
+.scene-body { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.6fr); gap: 20px }
+@media (max-width: 760px) { .scene-body { grid-template-columns: minmax(0, 1fr) } }
+.asis { display: grid; gap: 8px; align-content: start }
+.asis ol { margin: 0; padding-left: 18px; color: var(--muted); font-size: 13.5px; display: grid; gap: 4px }
+.label { font-size: 12px; font-weight: 700; letter-spacing: .04em }
+.label.old { color: var(--muted) }
+.label.new { color: var(--accent) }
+.success { font-size: 13px; background: var(--accent-soft); color: var(--ink); border-radius: 8px; padding: 8px 12px }
+
+/* wireframe */
+.screen { border: 1px solid var(--line); border-radius: 10px; overflow: hidden; background: var(--bg); font-size: 12.5px }
+.screen .bar { display: flex; gap: 8px; align-items: center; padding: 8px 12px; background: var(--surface); border-bottom: 1px solid var(--line); flex-wrap: wrap }
+.screen .bar .t { font-weight: 700; font-family: var(--font-display) }
+.screen .bar .sp { flex: 1 }
+.screen .in { padding: 12px; display: grid; gap: 10px }
+.btn { display: inline-block; font-size: 12px; font-weight: 500; padding: 4px 10px; border-radius: 6px; background: var(--accent); color: var(--surface) }
+.btn.ghost { background: transparent; color: var(--muted); border: 1px solid var(--line) }
+.box { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 10px; display: grid; gap: 6px; min-width: 0 }
+.split { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr); gap: 10px }
+@media (max-width: 520px) { .split { grid-template-columns: minmax(0, 1fr) } }
+.rail { display: flex; flex-wrap: wrap; gap: 4px; align-items: center }
+.rail .node { background: var(--accent-soft); color: var(--accent); border-radius: 6px; padding: 3px 8px; font-weight: 500 }
+.rail .node.add { background: transparent; border: 1px dashed var(--line); color: var(--muted) }
+.rail .arr { color: var(--muted) }
+.palette { display: flex; flex-wrap: wrap; gap: 4px }
+.palette span { border: 1px solid var(--line); border-radius: 6px; padding: 2px 8px; background: var(--surface); color: var(--muted) }
+.row { display: flex; justify-content: space-between; gap: 8px; align-items: baseline }
+.row .k { color: var(--muted) }
+.row.auto .k::after { content: " 자동"; font-size: 11px; color: var(--dev) }
+.row.total { border-top: 1px solid var(--line); padding-top: 6px; font-weight: 700 }
+.seg { display: flex; flex-wrap: wrap; gap: 4px }
+.seg span { border: 1px solid var(--line); border-radius: 6px; padding: 2px 8px; background: var(--surface) }
+.seg span.on { border-color: var(--accent); color: var(--accent); background: var(--accent-soft) }
+.seg span.unk { border-style: dashed; color: var(--muted) }
+.q { border-left: 3px solid var(--warn); padding-left: 8px; display: grid; gap: 4px }
+.q.soft { border-left-color: var(--line) }
+.q .opts { display: flex; gap: 4px; flex-wrap: wrap }
+.q .opts span { border: 1px solid var(--line); border-radius: 6px; padding: 1px 8px; background: var(--surface) }
+.ver { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 4px 10px; align-items: baseline }
+.ver .plus { color: var(--dev) }
+.ver .minus { color: var(--bad); text-decoration: line-through }
+.check { display: grid; gap: 4px }
+.check div { display: flex; gap: 6px; align-items: baseline; justify-content: space-between }
+.check i { font-style: normal; font-size: 11px }
+table.mini { width: 100%; border-collapse: collapse; font-size: 12px }
+table.mini td, table.mini th { padding: 5px 6px; border-bottom: 1px solid var(--line); text-align: left; white-space: nowrap }
+table.mini th { color: var(--muted); font-weight: 500 }
+.tw { overflow-x: auto }
+.cb { display: inline-block; width: 12px; height: 12px; border: 1.5px solid var(--muted); border-radius: 3px; vertical-align: -1px }
+.cb.on { background: var(--accent); border-color: var(--accent) }
+
+/* state model */
+.stages { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 6px }
+@media (max-width: 860px) { .stages { grid-template-columns: repeat(2, minmax(0, 1fr)) } }
+.stage { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 12px; display: grid; gap: 6px; align-content: start }
+.stage .n { font-family: var(--font-mono); color: var(--accent); font-size: 12px }
+.stage .db { font-family: var(--font-mono); font-size: 11px; color: var(--muted); overflow-wrap: anywhere }
+.stage ul { margin: 0; padding-left: 16px; font-size: 12.5px; color: var(--muted) }
+.exits { display: flex; flex-wrap: wrap; gap: 8px; font-size: 13px; color: var(--muted); align-items: center }
+
+/* roadmap */
+.road { display: grid; gap: 6px }
+.road div { display: grid; grid-template-columns: 44px minmax(0, 1fr) minmax(0, 1fr); gap: 12px; background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 10px 14px; align-items: baseline }
+@media (max-width: 620px) { .road div { grid-template-columns: 44px minmax(0, 1fr) } .road div span:last-child { grid-column: 2 } }
+.road b { font-family: var(--font-mono); color: var(--accent) }
+.road span:last-child { color: var(--muted); font-size: 13px }
+
+.qs { margin: 0; padding-left: 20px; display: grid; gap: 6px; max-width: 70ch }
+footer { margin-top: 56px; color: var(--muted); font-size: 13px }
+a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px }
+</style>
+
+<div class="wrap">
+  <p class="eyebrow">QUOTEMAKER · 리디자인 기획 · 2026-11-01</p>
+  <h1>요청은 고객 언어로, 검토는 질문 카드로, 확정 후는 체크리스트로</h1>
+  <p class="lede">사업팀이 헷갈리지 않고 견적을 요청하고, 개발팀과 관리자가 지금 기능을 더 빠르고 정확하게 쓰도록 화면과 흐름을 다시 짰습니다. 수치는 운영 DB 실측(숨김 제외 내부 견적 54건)입니다.</p>
+  <nav class="toc" aria-label="목차">
+    <a href="#personas">페르소나</a><a href="#scene-1">장면 1 요청</a><a href="#scene-2">장면 2 검토</a><a href="#scene-3">장면 3 승인</a><a href="#scene-4">장면 4 확정</a><a href="#scene-5">장면 5 정리</a><a href="#stages">상태 모델</a><a href="#roadmap">진행 순서</a><a href="#open">열린 질문</a>
+  </nav>
+
+  <div class="facts">
+    <div class="fact"><b>41%</b><span>개발팀이 손으로 만든 견적 항목 (268개 중 110개)</span></div>
+    <div class="fact"><b class="num">45 : 17</b><span>댓글 수 개발팀 : 사업팀. 회신은 주로 시스템 밖</span></div>
+    <div class="fact"><b>85%</b><span>기타 요청사항(자유 텍스트)이 채워진 요청 비율</span></div>
+    <div class="fact"><b>30%</b><span>미진행 처리된 견적 (54건 중 16건)</span></div>
+  </div>
+
+  <section id="personas">
+    <h2>페르소나</h2>
+    <div class="personas">
+      <article class="persona">
+        <header><h3>현장형 사업팀 담당자</h3><span class="chip sales">요청의 65%</span></header>
+        <p class="goal">통화 직후 10분 안에 요청하고 오늘 안에 금액을 고객에게 전달하고 싶다.</p>
+        <ul><li>“인쇄/출력 및 Printer SDK 연동” 같은 개발 단위를 모른다</li><li>기능 카드와 화면 구성을 두 번 고르거나 빠뜨린다</li><li>섞여 오는 질문 중 무엇이 금액에 영향 있는지 모른다</li></ul>
+        <p class="need"><b>필요</b> 고객 언어로 된 선택, 지난 견적 복제, 내 할 일 한 줄</p>
+      </article>
+      <article class="persona">
+        <header><h3>협력사·간헐 요청자</h3><span class="chip sales">월 1~3건</span></header>
+        <p class="goal">틀리지 않게 한 번에 제출하고 싶다.</p>
+        <ul><li>렌탈/재행사/판매 배율의 의미를 모른다</li><li>장비 질문에 “모름”이 없어 아무거나 고른다</li></ul>
+        <p class="need"><b>필요</b> 기본값과 예시, “아직 모름”, 제출 전 누락 경고</p>
+      </article>
+      <article class="persona">
+        <header><h3>검토·승인 개발팀장</h3><span class="chip dev">모든 견적 통과</span></header>
+        <p class="goal">당일 안에 질문 또는 승인. 단가 기준을 일관되게 적용.</p>
+        <ul><li>누락된 UI 개발 추가 등 항목 수동 수정이 잦다</li><li>무엇을 보냈는지(1차·2차·3차)가 엑셀에만 남는다</li><li>상세 하단에 상태 버튼·모달 8종이 몰려 오클릭 위험</li></ul>
+        <p class="need"><b>필요</b> 내 차례 큐, 질문 카드, 발송본 버전, 착수 체크리스트</p>
+      </article>
+      <article class="persona">
+        <header><h3>개발 담당자</h3><span class="chip dev">금액 비노출</span></header>
+        <p class="goal">무엇을 언제까지 만드는지와 자료 수령 여부만 한눈에.</p>
+        <ul><li>필요한 정보가 금액 중심 화면에 흩어져 있다</li><li>상세 API에서 금액이 차단되지 않는다 (10/15 확인)</li></ul>
+        <p class="need"><b>필요</b> 금액 없는 개발 카드, 자료 체크리스트, 배포 완료 버튼</p>
+      </article>
+      <article class="persona">
+        <header><h3>관리 관점</h3><span class="chip plain">월말·분기말</span></header>
+        <p class="goal">매출·미수금·정리 대상을 한 화면에서 보고 일괄 처리.</p>
+        <ul><li>행사일 지난 건을 하나씩 열어 미진행 처리</li><li>리포트·목록·달력의 숫자 기준이 각각 다르다</li></ul>
+        <p class="need"><b>필요</b> 정리함 일괄 처리, 같은 집계 기준</p>
+      </article>
+    </div>
+  </section>
+
+  <section>
+    <h2>스토리보드</h2>
+    <p class="lede" style="margin-top:0">예시 행사: 가을 팝업스토어 포토카드 키오스크, 2주 뒤 3일간, 방문 3,000명, Smart51. 와이어프레임 금액은 현재 모듈 단가로 계산한 예시입니다.</p>
+
+    <article class="scene" id="scene-1">
+      <div class="scene-head"><span class="step">장면 1</span><h3>요청: 통화 직후 체험을 그대로 고른다</h3><span class="chip sales">사업팀</span></div>
+      <div class="scene-body">
+        <div class="asis">
+          <span class="label old">현재</span>
+          <ol><li>견적 유형 → 기본 정보</li><li>개발 단위 기능 카드 선택</li><li>상세 옵션에서 화면 구성을 다시 선택 (선택 인쇄·KSNET은 양쪽에서 켜짐)</li><li>모르는 건 기타 요청사항에 자유 텍스트</li><li>금액이 확정가처럼 보임</li></ol>
+          <span class="label new">바뀐 흐름</span>
+          <ol><li>시작 방법: 표준 패키지 / 지난 견적 복제 / 빈 요청</li><li>방문객 체험을 순서대로 쌓으면 항목은 자동 매핑, 필수 항목은 자동 포함</li><li>장비 질문마다 “아직 모름” → 확인 요청으로 자동 전환</li><li>Smart31/51은 인쇄 사이즈를 묻지 않음 (옵셋 CR-80 전제)</li><li>“예상 금액 · 개발팀 검토 후 확정”</li></ol>
+        </div>
+        <div class="screen" aria-label="새 요청서 와이어프레임">
+          <div class="bar"><span class="t">새 견적 요청</span><span class="chip plain">행사 ✓</span><span class="chip acc">체험</span><span class="chip plain">장비</span><span class="chip plain">자료</span><span class="chip plain">점검</span></div>
+          <div class="in split">
+            <div class="box">
+              <b>방문객이 키오스크에서 무엇을 하나요?</b>
+              <div class="rail"><span class="node">시작 화면</span><span class="arr">→</span><span class="node">사진 촬영</span><span class="arr">→</span><span class="node">배경 고르기 · 4종</span><span class="arr">→</span><span class="node">카드 인쇄</span><span class="arr">→</span><span class="node add">+ 추가</span></div>
+              <span class="k" style="color:var(--muted)">추가할 수 있는 체험</span>
+              <div class="palette"><span>휴대폰 사진 올리기</span><span>이름·문구 입력</span><span>결제</span><span>모바일로 받기</span><span>NFC 기록</span><span>AI 화풍</span><span>기타(직접 설명)</span></div>
+              <b style="margin-top:4px">프린터</b>
+              <div class="seg"><span>Smart31</span><span class="on">Smart51</span><span>기타</span><span class="unk">아직 모름</span></div>
+            </div>
+            <div class="box">
+              <b>이렇게 견적됩니다</b>
+              <div class="row"><span class="k">카메라/촬영</span><span class="num">150,000</span></div>
+              <div class="row"><span class="k">배경 선택 인쇄</span><span class="num">150,000</span></div>
+              <div class="row auto"><span class="k">키오스크 UI 개발</span><span class="num">200,000</span></div>
+              <div class="row auto"><span class="k">인쇄 SDK 연동</span><span class="num">100,000</span></div>
+              <div class="row auto"><span class="k">테스트·유지보수</span><span class="num">100,000</span></div>
+              <div class="row total"><span>예상 (VAT 포함)</span><span class="num">770,000</span></div>
+              <span style="color:var(--muted);font-size:11.5px">개발팀 검토 후 확정됩니다</span>
+            </div>
+          </div>
+        </div>
+      </div>
+      <p class="success">성공 기준: 표준 포토카드 요청 3분 이내, 개발팀의 항목 수동 추가 0건</p>
+    </article>
+
+    <article class="scene" id="scene-2">
+      <div class="scene-head"><span class="step">장면 2</span><h3>검토: 질문은 카드로, 회신은 시스템 안에서</h3><span class="chip dev">개발팀</span><span class="chip sales">사업팀</span></div>
+      <div class="scene-body">
+        <div class="asis">
+          <span class="label old">현재</span>
+          <ol><li>“검토 시작”을 따로 누른다</li><li>질문은 댓글 한 덩어리</li><li>알림 메일은 스팸함으로 가기도 하고 회신은 메신저로 온다</li><li>개발팀이 회신을 다시 견적에 옮긴다</li></ol>
+          <span class="label new">바뀐 흐름</span>
+          <ol><li>열면 자동으로 검토 중</li><li>질문은 “금액 영향 / 진행 확정 때” 두 그룹, 번호는 그룹마다 1부터</li><li>선택지에 금액 변화를 걸어 둠 → 답이 오면 “반영” 한 번</li><li>금액 영향 질문이 남아 있으면 승인 버튼에 가드레일</li></ol>
+        </div>
+        <div class="screen" aria-label="확인 요청 와이어프레임">
+          <div class="bar"><span class="mono">QT-20261101-001</span><span class="t">가을 팝업 포토카드</span><span class="sp"></span><span class="chip sales">사업팀 차례 · 회신 2</span></div>
+          <div class="in">
+            <div class="box">
+              <b>확인 필요 (금액 영향)</b>
+              <div class="q"><span>1. 촬영한 사진을 방문객 휴대폰으로도 받게 할까요?</span><div class="opts"><span>필요 · +150,000</span><span>불필요</span></div></div>
+              <div class="q"><span>2. 배경 선택은 4종 중 고르기만 하나요, 인쇄 문구도 바뀌나요?</span><div class="opts"><span>고르기만</span><span>문구도 변경 · +150,000</span></div></div>
+            </div>
+            <div class="box">
+              <b>진행 확정되면 알려주시면 됩니다 (금액 영향 없음)</b>
+              <div class="q soft"><span>1. 네트워크 환경 <span class="chip plain">요청서에서 “아직 모름”</span></span></div>
+              <div class="q soft"><span>2. 카드 뒷면 디자인 유무</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <p class="success">성공 기준: 확인 요청의 80% 이상이 시스템 안에서 회신</p>
+    </article>
+
+    <article class="scene" id="scene-3">
+      <div class="scene-head"><span class="step">장면 3</span><h3>승인: 고객에게 나간 금액을 버전으로 남긴다</h3><span class="chip dev">개발팀장</span></div>
+      <div class="scene-body">
+        <div class="asis">
+          <span class="label old">현재</span>
+          <ol><li>승인 버튼 → 메일 발송</li><li>보낸 내용은 엑셀 파일로만 남음</li><li>재문의는 새 견적을 만들거나 금액을 덮어씀</li></ol>
+          <span class="label new">바뀐 흐름</span>
+          <ol><li>“승인하고 사업팀에 전달” 전에 수신자·금액·남은 질문 미리보기</li><li>승인 시 발송본 v1 고정, Excel은 발송본에서 생성</li><li>고객 조정 요청 → 검토로 복귀 → 재승인은 v2, 차이 자동 표시</li></ol>
+        </div>
+        <div class="screen" aria-label="버전 비교 와이어프레임">
+          <div class="bar"><span class="t">견적 · 발송본</span><span class="chip plain">v1 10/28</span><span class="chip acc">v2 11/01</span><span class="sp"></span><span class="btn ghost">Excel (v2)</span></div>
+          <div class="in">
+            <div class="box">
+              <b>v1 → v2 변경</b>
+              <div class="ver"><span class="plus">+</span><span>모바일로 받기 (QR 전송)</span><span class="num plus">+150,000</span></div>
+              <div class="ver"><span class="minus">−</span><span class="minus">이름·문구 입력</span><span class="num minus">−150,000</span></div>
+              <div class="row total"><span>합계 (VAT 포함)</span><span class="num">770,000 → 770,000</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <p class="success">성공 기준: 모든 발송 금액이 시스템에 남고, 재문의가 새 견적 번호를 만들지 않음</p>
+    </article>
+
+    <article class="scene" id="scene-4">
+      <div class="scene-head"><span class="step">장면 4</span><h3>확정과 착수: 자료와 준비 상태가 한 화면에</h3><span class="chip sales">사업팀</span><span class="chip dev">개발팀</span></div>
+      <div class="scene-body">
+        <div class="asis">
+          <span class="label old">현재</span>
+          <ol><li>확정 모달에 행사일·개발 마감만 입력</li><li>시안·문구·KSNET 코드 수령은 노션·메신저에서 따로</li><li>노션 문서·폴더·베이스 코드 세팅은 기억에 의존</li></ol>
+          <span class="label new">바뀐 흐름</span>
+          <ol><li>사업팀 “고객이 진행 확정했어요” → 일정 확인, 남은 질문 답변, 자료 체크리스트</li><li>자료 목록은 체험 단계에서 자동 생성</li><li>납기는 디자인 수령일 + 난이도별 일수로 자동 제안</li><li>개발 담당은 금액 없는 개발 카드로 받음</li></ol>
+        </div>
+        <div class="screen" aria-label="진행 탭 와이어프레임">
+          <div class="bar"><span class="t">진행</span><span class="chip acc">4 진행 확정</span><span class="sp"></span><span class="chip warn">납기 D-5 · 시안 미수령</span></div>
+          <div class="in split">
+            <div class="box">
+              <b>자료 체크리스트</b>
+              <div class="check">
+                <div><span><span class="cb on"></span> 카드 앞면 시안</span><i class="chip dev">받음</i></div>
+                <div><span><span class="cb"></span> 배경 시안 4종</span><i class="chip warn">11/05 예정</i></div>
+                <div><span><span class="cb"></span> 시작 화면 디자인</span><i class="chip warn">11/05 예정</i></div>
+                <div><span><span class="cb on"></span> 카드 뒷면</span><i class="chip plain">불필요</i></div>
+              </div>
+            </div>
+            <div class="box">
+              <b>착수 준비 <span class="num" style="color:var(--muted);font-weight:400">2/4</span></b>
+              <div class="check">
+                <div><span><span class="cb on"></span> 노션 문서</span><i class="chip plain">링크</i></div>
+                <div><span><span class="cb on"></span> 개발 담당 지정</span><i class="chip plain">기본값</i></div>
+                <div><span><span class="cb"></span> 프로젝트 폴더</span></div>
+                <div><span><span class="cb"></span> 베이스 코드</span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <p class="success">성공 기준: 자료 미수령으로 납기가 밀릴 위험이 화면에 먼저 보인다</p>
+    </article>
+
+    <article class="scene" id="scene-5">
+      <div class="scene-head"><span class="step">장면 5</span><h3>정리: 미진행·완료·입금을 한 번에</h3><span class="chip dev">관리</span></div>
+      <div class="scene-body">
+        <div class="asis">
+          <span class="label old">현재</span>
+          <ol><li>행사일 경과 배지를 보고 건마다 열어 미진행 처리</li><li>입금은 상세에서 하나씩 기록</li><li>리포트는 별도 기준으로 집계</li></ol>
+          <span class="label new">바뀐 흐름</span>
+          <ol><li>정리함 세 묶음: 행사일 지남 / 완료 처리 대기 / 입금 대기</li><li>체크 후 일괄 처리, 사유는 각 견적에 기록</li><li>리포트·목록·달력이 같은 집계를 쓰고 숫자를 누르면 목록으로 이동</li></ol>
+        </div>
+        <div class="screen" aria-label="정리함 와이어프레임">
+          <div class="bar"><span class="t">정리함</span><span class="chip bad">행사일 지남 3</span><span class="chip plain">완료 대기 2</span><span class="chip plain">입금 대기 4</span></div>
+          <div class="in">
+            <div class="box tw">
+              <table class="mini">
+                <thead><tr><th></th><th>견적</th><th>행사</th><th>행사일</th><th>승인 후</th></tr></thead>
+                <tbody>
+                  <tr><td><span class="cb on"></span></td><td class="mono">QT-…-001</td><td>코엑스 브랜드 체험존</td><td class="num">10/18</td><td class="num">33일</td></tr>
+                  <tr><td><span class="cb on"></span></td><td class="mono">QT-…-002</td><td>지역 축제 포토부스</td><td class="num">10/25</td><td class="num">21일</td></tr>
+                  <tr><td><span class="cb"></span></td><td class="mono">QT-…-003</td><td>사내 행사 사원증</td><td class="num">10/30</td><td class="num">12일</td></tr>
+                </tbody>
+              </table>
+              <div class="row"><span class="k">2건 선택</span><span><span class="btn ghost">보류로</span> <span class="btn">미진행 처리 · 사유 선택</span></span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <p class="success">성공 기준: 월말 정리 10분 이내, 리포트와 목록 숫자 불일치 0</p>
+    </article>
+  </section>
+
+  <section id="stages">
+    <h2>상태 모델: 9개 상태값 → 7단계와 “다음 차례”</h2>
+    <p class="lede" style="margin-top:0">DB 상태값은 그대로 두고 화면에서만 단계로 묶습니다. 4·5·6단계는 확정 상태에 체크리스트·배포 여부를 더해 계산합니다. 모든 견적에 지금 누가 움직여야 하는지가 표시됩니다.</p>
+    <div class="stages">
+      <div class="stage"><span class="n">1</span><h3>요청</h3><span class="db">draft</span><span class="chip sales">사업팀</span><ul><li>작성 중</li></ul></div>
+      <div class="stage"><span class="n">2</span><h3>검토</h3><span class="db">pending · reviewing</span><span class="chip dev">개발팀</span><ul><li>검토 대기</li><li>회신 대기 → 사업팀</li></ul></div>
+      <div class="stage"><span class="n">3</span><h3>고객 전달</h3><span class="db">approved</span><span class="chip sales">사업팀·고객사</span><ul><li>전달 전</li><li>회신 대기 N일</li><li>행사일 지남</li></ul></div>
+      <div class="stage"><span class="n">4</span><h3>진행 확정</h3><span class="db">confirmed</span><span class="chip sales">자료</span> <span class="chip dev">세팅</span><ul><li>자료 대기</li><li>착수 준비</li></ul></div>
+      <div class="stage"><span class="n">5</span><h3>개발</h3><span class="db">confirmed · 미배포</span><span class="chip dev">개발 담당</span><ul><li>D-day / 초과</li><li>배포 미확인</li></ul></div>
+      <div class="stage"><span class="n">6</span><h3>행사</h3><span class="db">confirmed · 배포</span><span class="chip dev">개발팀</span><ul><li>행사 전·중</li><li>완료 처리 대기</li></ul></div>
+      <div class="stage"><span class="n">7</span><h3>완료</h3><span class="db">completed</span><span class="chip plain">관리</span><ul><li>입금 대기</li><li>정산 완료</li></ul></div>
+    </div>
+    <div class="exits"><span>이탈</span><span class="chip plain">보류 · on_hold</span><span class="chip plain">미진행 · lost / rejected</span><span>상세 페이지의 주요 행동 버튼은 단계마다 1개, 되돌리기는 “더보기” 안에서 지워지는 값을 보여준 뒤 실행</span></div>
+  </section>
+
+  <section id="roadmap">
+    <h2>진행 순서</h2>
+    <div class="road">
+      <div><b>R0</b><span>dev_staff 금액 API 차단 + 검토 시작 자동화</span><span>보안 구멍. 리디자인과 무관하게 먼저</span></div>
+      <div><b>R1</b><span>“내 차례” 홈, 다음 차례 계산, 상세 버튼 축소</span><span>헷갈림의 직접 원인, 데이터 변경 최소</span></div>
+      <div><b>R2</b><span>확인 요청 카드 + 인앱 알림</span><span>회신을 시스템 안으로</span></div>
+      <div><b>R3</b><span>체험 단계 요청서 + 표준 패키지 + 자동 매핑</span><span>수동 항목 41% 감소. 가장 큰 변경</span></div>
+      <div><b>R4</b><span>발송본 버전과 비교</span><span>정확한 발송 기록</span></div>
+      <div><b>R5</b><span>확정 마법사, 자료·착수 체크리스트, 개발 보드</span><span>확정 후 처리</span></div>
+      <div><b>R6</b><span>정리함 일괄 처리, 리포트 집계 통합</span><span>관리 효율</span></div>
+    </div>
+  </section>
+
+  <section id="open">
+    <h2>결정이 필요한 질문</h2>
+    <ol class="qs">
+      <li>표준 패키지 초기 목록 (포토카드 기본 / 텍스트 인쇄 / 선택 인쇄 / 입력형 카드 발급 / 결제형 중 무엇을)</li>
+      <li>반려 상태 유지 여부. 실사용 5건이라 “보완 요청”으로 대체할지</li>
+      <li>고객 전달일: 사업팀이 직접 기록할지, 승인 시점을 전달로 볼지</li>
+      <li>외부 협력사 요청자에게 별도 권한이 필요한지</li>
+      <li>선택지 금액 반영을 1차에 넣을지, 수동 반영으로 시작할지</li>
+      <li>회신 요청 알림 메일을 사업팀에도 보낼지 (현재 개발팀만 수신)</li>
+    </ol>
+  </section>
+
+  <footer>원문: quote-maker 저장소 <span class="mono">docs/redesign/</span> (01-personas · 02-storyboard · 03-planning · 04-design)</footer>
+</div>

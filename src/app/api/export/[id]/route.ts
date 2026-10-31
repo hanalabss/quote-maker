@@ -5,6 +5,7 @@ import ExcelJS from "exceljs";
 import { amountToKorean, formatKRW } from "@/lib/pricing";
 import { TYPE_LABELS } from "@/types";
 import type { QuoteType } from "@/types";
+import { canSeePrice } from "@/lib/priceVisibility";
 
 // 공통 스타일
 const thin: Partial<ExcelJS.Border> = { style: "thin" };
@@ -38,6 +39,16 @@ export async function GET(
 
   if (!quote) {
     return NextResponse.json({ error: "견적을 찾을 수 없습니다" }, { status: 404 });
+  }
+
+  // 견적서는 금액 문서 — 금액 비노출 role(dev_staff)은 다운로드 불가
+  if (!canSeePrice(user.role)) {
+    return NextResponse.json({ error: "권한이 없습니다" }, { status: 403 });
+  }
+
+  // sales는 자기 견적만 다운로드 가능 (상세 조회와 동일 규칙)
+  if (user.role === "sales" && quote.createdById !== user.id) {
+    return NextResponse.json({ error: "권한이 없습니다" }, { status: 403 });
   }
 
   // 외주 프로젝트는 dev만 다운로드 가능

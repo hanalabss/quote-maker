@@ -5,6 +5,7 @@ import { sendQuoteNotification } from "@/lib/email";
 import { getAuthUser } from "@/lib/auth";
 import { TYPE_PRICE_RATE } from "@/types";
 import type { QuoteType } from "@/types";
+import { redactQuotePrices } from "@/lib/priceVisibility";
 
 // 견적번호 생성: QT-YYYYMMDD-XXX (트랜잭션 + 재시도로 레이스컨디션 방지)
 async function generateQuoteNumber(maxRetries = 3): Promise<string> {
@@ -63,7 +64,7 @@ export async function GET(request: NextRequest) {
       orderBy: { createdAt: "desc" },
     });
 
-    return NextResponse.json(quotes);
+    return NextResponse.json(quotes.map((q) => redactQuotePrices(q, user.role)));
   } catch (error) {
     console.error("견적 목록 조회 오류:", error);
     return NextResponse.json({ error: "견적 목록을 불러오는 중 오류가 발생했습니다" }, { status: 500 });

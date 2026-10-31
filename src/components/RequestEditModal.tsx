@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Check, Loader2 } from "lucide-react";
 import { formatKRW } from "@/lib/pricing";
+import { MODULE_GUIDE } from "@/lib/moduleGuide";
 import {
   buildRequestItems,
   deriveSelection,
@@ -135,7 +136,11 @@ export function RequestEditModal({
                       {selected && <Check className="w-3 h-3 text-white" />}
                     </div>
                     <div className="min-w-0">
-                      <div className="text-sm font-semibold">{mod.name}</div>
+                      {/* 수정 모달은 좁아서 사업팀용 이름 + when 한 줄만 */}
+                      <div className="text-sm font-semibold">{MODULE_GUIDE[mod.code]?.title ?? mod.name}</div>
+                      {MODULE_GUIDE[mod.code] && (
+                        <p className="text-xs text-gray-500 mt-0.5 leading-snug">{MODULE_GUIDE[mod.code].when}</p>
+                      )}
                       {showPrice && (
                         <div className="text-xs font-semibold mt-1 tabular-nums text-blue-700">
                           {mod.code === "AI_STYLE" && mod.basePrice === 0

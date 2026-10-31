@@ -228,12 +228,15 @@ export async function sendRevisionRequestNotification(data: {
 
 // 확정 시 → 개발팀 + 요청자에게
 export async function sendConfirmationNotification(data: ConfirmationNotificationData) {
-  const htmlContent = emailLayout("행사가 확정되었습니다", `
+  // dev_staff는 금액 비노출 — 금액 행을 뺀 본문을 따로 만든다
+  const buildHtml = (withAmount: boolean) => emailLayout("행사가 확정되었습니다", `
     ${infoTable([
       { label: "견적번호", value: data.quoteNumber },
       { label: "행사명", value: data.eventName },
       { label: "요청자", value: data.requesterName },
-      { label: "견적금액(VAT포함)", value: `${new Intl.NumberFormat("ko-KR").format(data.totalAmount)}원`, highlight: true },
+      ...(withAmount
+        ? [{ label: "견적금액(VAT포함)", value: `${new Intl.NumberFormat("ko-KR").format(data.totalAmount)}원`, highlight: true }]
+        : []),
       { label: "최종 행사일", value: data.confirmedDate },
       { label: "개발 마감일", value: `<strong style="color: #dc2626;">${data.devDeadline}</strong>` },
     ])}
@@ -242,14 +245,18 @@ export async function sendConfirmationNotification(data: ConfirmationNotificatio
 
   const subject = `[행사확정] ${data.eventName} - 마감일: ${data.devDeadline}`;
 
-  // 개발팀에게 발송
-  const devEmails = await getDevEmails(["dev", "dev_staff"]);
+  // 개발팀에게 발송 (dev: 금액 포함 / dev_staff: 금액 제외)
+  const devEmails = await getDevEmails(["dev"]);
   if (devEmails.length > 0) {
-    await sendEmail(devEmails.join(","), subject, htmlContent);
+    await sendEmail(devEmails.join(","), subject, buildHtml(true));
+  }
+  const staffEmails = (await getDevEmails(["dev_staff"])).filter((e) => !devEmails.includes(e));
+  if (staffEmails.length > 0) {
+    await sendEmail(staffEmails.join(","), subject, buildHtml(false));
   }
 
   // 요청자에게도 발송
   if (data.requesterEmail) {
-    await sendEmail(data.requesterEmail, subject, htmlContent);
+    await sendEmail(data.requesterEmail, subject, buildHtml(true));
   }
 }
