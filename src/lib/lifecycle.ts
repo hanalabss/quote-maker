@@ -4,6 +4,7 @@
 //  - 미배포 + 행사 시작일 도래 → 배포 미확인 (초과보다 심각)
 //  - 행사 종료 경과 → 완료 처리 대기 (남은 일이 "완료 처리"로 바뀜)
 //  - 배포 완료 후에는 마감 개념이 소멸하므로 초과를 표시하지 않는다.
+//  - 승인/보류인데 행사일 경과 → 행사일 지남 (거래처 회신 없음 → 미진행 정리 대상)
 
 export interface LifecycleInput {
   status: string;
@@ -11,6 +12,8 @@ export interface LifecycleInput {
   devCompletedAt?: string | null; // ISO datetime (배포 완료 시각)
   confirmedDate?: string | null; // 행사 시작일 yyyy-mm-dd
   confirmedEndDate?: string | null; // 행사 종료일 yyyy-mm-dd
+  eventDate?: string | null; // 요청서상 행사 시작일 yyyy-mm-dd
+  eventEndDate?: string | null; // 요청서상 행사 종료일 yyyy-mm-dd
 }
 
 export type LifecycleBadge =
@@ -19,6 +22,7 @@ export type LifecycleBadge =
   | { kind: "deploy-missing" } // 미배포인데 행사 시작일 도래/경과
   | { kind: "deployed" } // 배포 완료, 행사 종료 전
   | { kind: "awaiting-complete" } // 행사 종료 경과, 완료 처리 대기
+  | { kind: "event-passed" } // 승인/보류인데 행사일 경과 — 미진행 정리 대상
   | null;
 
 export function todayStr(now: Date = new Date()): string {
@@ -33,6 +37,12 @@ export function diffDays(from: string, to: string): number {
 }
 
 export function getLifecycleBadge(q: LifecycleInput, today: string): LifecycleBadge {
+  // 승인/보류 상태로 행사일이 지남 = 확정 회신 없이 끝난 행사. 상태는 바꾸지 않고 표시만 한다.
+  if (q.status === "approved" || q.status === "on_hold") {
+    const end = q.eventEndDate || q.eventDate;
+    return end && end < today ? { kind: "event-passed" } : null;
+  }
+
   if (q.status !== "confirmed") return null;
 
   // 행사 종료가 지났으면 배포 여부와 무관하게 남은 일은 "완료 처리"

@@ -144,11 +144,15 @@ async function parseXlsx(filePath, folderMeta) {
   }
 
   // 합계 추출 (부동소수점 round)
-  const subtotalRaw = getNum(ws.getCell(totalRow, 7).value) || items.reduce((s, x) => s + x.amount, 0);
-  const totalAmountRaw = getNum(ws.getCell(totalRow, 8).value) || (subtotalRaw * 1.1);
-  const subtotal = Math.round(subtotalRaw);
-  const totalAmount = Math.round(totalAmountRaw);
-  const vat = totalAmount - subtotal;
+  // 합계 행 셀은 양식에 따라 소계+VAT포함합계가 합산된 값(항목합×2.1)이 들어있는 경우가 있어
+  // 셀을 믿지 않고 항목 합계로 산정한다 (2026-08-25 전 건 2.1배 부풀림 발견 후 수정)
+  const subtotal = Math.round(items.reduce((s, x) => s + x.amount, 0));
+  const vat = Math.round(subtotal * 0.1);
+  const totalAmount = subtotal + vat;
+  const cellTotal = getNum(ws.getCell(totalRow, 8).value);
+  if (cellTotal && Math.abs(cellTotal - totalAmount) > 1) {
+    console.warn(`   ⚠️  합계 셀(${cellTotal}) ≠ 항목합×1.1(${totalAmount}) — 항목합 기준 사용: ${filePath}`);
+  }
 
   // type 추출 (description 영역에서 [판매]/[렌탈]/[재행사])
   let type = 'sale';

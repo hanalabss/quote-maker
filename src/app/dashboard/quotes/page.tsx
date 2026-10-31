@@ -43,6 +43,7 @@ export default async function QuotesPage() {
     devCompletedAt: q.devCompletedAt?.toISOString() ?? null,
     confirmedDate: q.confirmedDate,
     confirmedEndDate: q.confirmedEndDate,
+    eventDate: q.eventDate,
     eventEndDate: q.eventEndDate,
     isExternal: q.isExternal,
   }));

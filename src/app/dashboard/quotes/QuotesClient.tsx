@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Search, ChevronRight, AlertCircle, Clock, CheckCheck } from "lucide-react";
+import { Search, ChevronRight, AlertCircle, Clock, CheckCheck, CalendarX } from "lucide-react";
 import { formatKRW } from "@/lib/pricing";
 import type { QuoteStatus, QuoteType } from "@/types";
 import { STATUS_LABELS, STATUS_COLORS, TYPE_LABELS, TYPE_COLORS } from "@/types";
@@ -22,6 +22,7 @@ interface QuoteListItem {
   devCompletedAt?: string | null;
   confirmedDate?: string | null;
   confirmedEndDate?: string | null;
+  eventDate?: string | null;
   eventEndDate?: string | null;
   isExternal?: boolean;
 }
@@ -45,6 +46,8 @@ function LifecycleBadgeView({ badge }: { badge: LifecycleBadge }) {
       return <span className="ml-1.5 text-xs text-emerald-600 font-medium">배포 완료</span>;
     case "awaiting-complete":
       return <span className="ml-1.5 text-xs text-amber-600 font-medium">완료 처리 대기</span>;
+    case "event-passed":
+      return <span className="ml-1.5 text-xs text-gray-500 font-medium">행사일 지남</span>;
   }
 }
 
@@ -77,6 +80,9 @@ function DateCell({ q }: { q: QuoteListItem }) {
 }
 
 type SortKey = "latest" | "deadline" | "amount";
+
+// 상태가 아닌 배지 기준 필터 (승인/보류 + 행사일 경과)
+const EVENT_PASSED_FILTER = "__event_passed";
 
 export function QuotesClient({
   quotes: allQuotes,
@@ -133,6 +139,11 @@ export function QuotesClient({
     () => allQuotes.filter((q) => badges.get(q.id)?.kind === "awaiting-complete"),
     [allQuotes, badges]
   );
+  // 승인/보류인데 행사일이 지난 건 — 거래처 회신 없음, 미진행 정리 대상
+  const eventPassed = useMemo(
+    () => allQuotes.filter((q) => badges.get(q.id)?.kind === "event-passed"),
+    [allQuotes, badges]
+  );
   const pendingCount = useMemo(() => allQuotes.filter((q) => q.status === "pending").length, [allQuotes]);
 
   const oldestPendingDays = useMemo(() => {
@@ -149,7 +160,9 @@ export function QuotesClient({
     // 검색 중에는 외주/자체 탭을 가로질러 전체에서 찾는다 (행의 외주 배지로 구분)
     const searchBase = search ? allQuotes : quotes;
     const base = searchBase.filter((q) => {
-      const matchFilter = !filter || q.status === filter;
+      const matchFilter =
+        !filter ||
+        (filter === EVENT_PASSED_FILTER ? badges.get(q.id)?.kind === "event-passed" : q.status === filter);
       const matchSearch =
         !search ||
         q.eventName.toLowerCase().includes(search.toLowerCase()) ||
@@ -170,7 +183,7 @@ export function QuotesClient({
     }
     // latest: 서버에서 이미 createdAt desc
     return sorted;
-  }, [quotes, allQuotes, filter, search, sort]);
+  }, [quotes, allQuotes, badges, filter, search, sort]);
 
   const goTo = (id: string) => router.push(`/dashboard/quotes/${id}`);
 
@@ -188,7 +201,7 @@ export function QuotesClient({
       </div>
 
       {/* 오늘 할 일 스트립 */}
-      {(urgent.length > 0 || awaitingComplete.length > 0 || pendingCount > 0) && (
+      {(urgent.length > 0 || awaitingComplete.length > 0 || eventPassed.length > 0 || pendingCount > 0) && (
         <div className="flex flex-wrap gap-2 mb-4">
           {urgent.length > 0 && (
             <button
@@ -219,6 +232,21 @@ export function QuotesClient({
               <CheckCheck className="w-3.5 h-3.5" />
               완료 처리 대기 {awaitingComplete.length}건
               <span className="hidden sm:inline">— {awaitingComplete[0].eventName}</span>
+            </button>
+          )}
+          {eventPassed.length > 0 && (
+            <button
+              onClick={() => setFilter(filter === EVENT_PASSED_FILTER ? "" : EVENT_PASSED_FILTER)}
+              aria-pressed={filter === EVENT_PASSED_FILTER}
+              className={`inline-flex items-center gap-1.5 text-xs sm:text-sm font-medium px-3 py-1.5 rounded-full border transition-colors ${
+                filter === EVENT_PASSED_FILTER
+                  ? "bg-gray-200 text-gray-800 border-gray-400"
+                  : "bg-gray-50 text-gray-700 border-gray-200 hover:bg-gray-100"
+              }`}
+            >
+              <CalendarX className="w-3.5 h-3.5" />
+              행사일 지남 {eventPassed.length}건
+              <span className="hidden sm:inline text-gray-500">— 회신 없으면 미진행 처리</span>
             </button>
           )}
           {pendingCount > 0 && (
