@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { calculateQuote } from "@/lib/pricing";
+import { buildRequestItems } from "@/lib/requestItems";
 import { sendQuoteNotification } from "@/lib/email";
 import { getAuthUser } from "@/lib/auth";
 import { TYPE_PRICE_RATE } from "@/types";
@@ -106,95 +106,31 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 선택된 모듈 조회
-    const modules = await prisma.module.findMany({
-      where: { code: { in: selectedModules } },
+    // 선택 모듈 + 자동 포함(TEST_QA) + 화면 구성/토글로 켜는 선택 인쇄·KSNET 모듈
+    const allModules = await prisma.module.findMany({
+      where: {
+        OR: [
+          { code: { in: [...selectedModules, "SELECT_PRINT", "KSNET_PAY"] } },
+          { isAutoIncluded: true },
+        ],
+      },
       orderBy: { sortOrder: "asc" },
     });
 
-    // 자동 포함 모듈 추가 (TEST_QA)
-    const autoModules = await prisma.module.findMany({
-      where: { isAutoIncluded: true, code: { notIn: selectedModules } },
-    });
-
-    const allModules = [...modules, ...autoModules];
-
-    // 화면 구성 라벨 매핑
-    const screenLabels: Record<string, string> = {
-      splash: "스플래시",
-      camera: "카메라 촬영",
-      qr: "QR 업로드",
-      image_select: "이미지 선택",
-      select_print: "선택 인쇄",
-      text_input: "텍스트 입력",
-      printing: "인쇄 진행 중",
-      complete: "인쇄 완료",
-    };
-
     // 가격 산정 (유형별 배율 적용)
     const quoteType = (type || "rental") as QuoteType;
-    const priceRate = TYPE_PRICE_RATE[quoteType] ?? 1.0;
-    const pricing = calculateQuote(allModules, priceRate);
-
-    // UI_BASIC 항목에 화면 구성 설명 적용 + 디바이스에 따라 항목명 변경
-    const uiItem = pricing.items.find((item) => item.moduleCode === "UI_BASIC");
-    if (uiItem) {
-      if (screenDevice === "tablet") {
-        uiItem.moduleName = "태블릿 UI 개발";
-      } else if (screenDevice === "laptop") {
-        uiItem.moduleName = "노트북 UI 개발";
-      }
-      if (screenComposition?.length > 0) {
-        const flowDesc = (screenComposition as string[])
-          .map((v: string) => screenLabels[v] || v)
-          .join(" → ");
-        uiItem.description = flowDesc;
-      }
-    }
-
-    // 선택 인쇄 항목 추가 (화면 구성에 select_print 포함 시)
-    if ((screenComposition as string[])?.includes("select_print")) {
-      const selectPrintPrice = Math.round(150000 * priceRate);
-      pricing.items.push({
-        moduleCode: "SELECT_PRINT",
-        moduleName: "선택 인쇄 기능",
-        description: "업로드 이미지 선택 출력",
-        unitPrice: selectPrintPrice,
-        quantity: 1,
-        amount: selectPrintPrice,
-      });
-      pricing.subtotal += selectPrintPrice;
-      pricing.vat = Math.round(pricing.subtotal * 0.1);
-      pricing.totalAmount = pricing.subtotal + pricing.vat;
-    }
-
-    // KSNET 결제 연동 항목 추가
-    if (useKsnetPayment) {
-      const ksnetPrice = Math.round(300000 * priceRate);
-      pricing.items.push({
-        moduleCode: "KSNET_PAY",
-        moduleName: "KSNET 결제 시스템 연동",
-        description: "KSNET 실결제 연동, 카드 결제 테스트 및 검증, 실결제 환경 적용",
-        unitPrice: ksnetPrice,
-        quantity: 1,
-        amount: ksnetPrice,
-      });
-      pricing.subtotal += ksnetPrice;
-      pricing.vat = Math.round(pricing.subtotal * 0.1);
-      pricing.totalAmount = pricing.subtotal + pricing.vat;
-    }
-
-    // DB 로그 서비스 항목 추가 (무료)
-    if (useDbLogging) {
-      pricing.items.push({
-        moduleCode: "DB_LOG",
-        moduleName: "DB 직접 연결 로그",
-        description: "인쇄 횟수/사용 통계 기록 (서비스)",
-        unitPrice: 0,
-        quantity: 1,
-        amount: 0,
-      });
-    }
+    const pricing = buildRequestItems({
+      selection: {
+        selectedModules,
+        screenComposition: screenComposition || [],
+        useKsnetPayment: !!useKsnetPayment,
+        useDbLogging: !!useDbLogging,
+      },
+      modules: allModules,
+      priceRate: TYPE_PRICE_RATE[quoteType] ?? 1.0,
+      screenDevice,
+      ksnetMerchantId,
+    });
 
     // 견적번호 생성
     const quoteNumber = await generateQuoteNumber();
@@ -227,20 +163,7 @@ export async function POST(request: NextRequest) {
         subtotal: pricing.subtotal,
         vat: pricing.vat,
         totalAmount: pricing.totalAmount,
-        items: {
-          create: pricing.items.map((item, index) => ({
-            moduleId: allModules.find((m) => m.code === item.moduleCode)?.id || null,
-            sortOrder: index + 1,
-            itemName: item.moduleName,
-            description: item.description,
-            unitPrice: item.unitPrice,
-            quantity: item.quantity,
-            amount: item.amount,
-            note: item.moduleCode === "DB_LOG" ? "서비스"
-              : item.moduleCode === "KSNET_PAY" && ksnetMerchantId ? `가맹점: ${ksnetMerchantId}`
-              : undefined,
-          })),
-        },
+        items: { create: pricing.items },
       },
       include: { items: true },
     });

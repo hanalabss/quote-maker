@@ -10,6 +10,7 @@ import { applyPriceRate, formatKRW } from "@/lib/pricing";
 import { TYPE_PRICE_RATE } from "@/types";
 import type { QuoteType } from "@/types";
 import { buildBaselineMap, normalizeItemName } from "@/lib/baseline";
+import { buildRequestItems, SCREEN_FLOWS } from "@/lib/requestItems";
 
 // 승인 가드레일: 단가·납기 자동 검증. 경고 목록 반환 (soft gate — overrideReason으로 강행 가능)
 async function collectApprovalWarnings(quote: {
@@ -350,6 +351,135 @@ export async function PATCH(
         items: { orderBy: { sortOrder: "asc" } },
         createdBy: { select: { name: true, team: true, email: true } },
         reviewedBy: { select: { name: true } },
+      },
+    });
+    return NextResponse.json(updated);
+  }
+
+  // 기능 수정 (기능 선택·화면 구성 → 항목·금액 재산정) — 대기중(pending)일 때만, 요청자 본인 또는 dev
+  // 개발팀 검토가 시작되면(reviewing~) 손본 항목이 덮어써지지 않게 막고, 댓글·수정 요청으로 받는다.
+  if (body.requestEdit && typeof body.requestEdit === "object") {
+    if (quote.status !== "pending") {
+      return NextResponse.json(
+        { error: "대기중인 견적만 기능을 수정할 수 있습니다. 검토가 시작된 견적은 댓글로 요청해주세요." },
+        { status: 400 }
+      );
+    }
+    if (user.role === "sales") {
+      if (quote.createdById !== user.id) {
+        return NextResponse.json({ error: "본인 견적만 수정할 수 있습니다" }, { status: 403 });
+      }
+    } else if (user.role !== "dev") {
+      return NextResponse.json({ error: "권한이 없습니다" }, { status: 403 });
+    }
+
+    const re = body.requestEdit;
+    const isStringArray = (v: unknown): v is string[] =>
+      Array.isArray(v) && v.every((x) => typeof x === "string");
+    if (!isStringArray(re.selectedModules) || re.selectedModules.length === 0) {
+      return NextResponse.json({ error: "기능을 하나 이상 선택해주세요" }, { status: 400 });
+    }
+    if (re.screenComposition !== undefined && !isStringArray(re.screenComposition)) {
+      return NextResponse.json({ error: "화면 구성 형식이 올바르지 않습니다" }, { status: 400 });
+    }
+    const selection = {
+      selectedModules: [...new Set(re.selectedModules as string[])],
+      screenComposition: [...new Set((re.screenComposition as string[] | undefined) ?? [])],
+      useKsnetPayment: !!re.useKsnetPayment,
+      useDbLogging: !!re.useDbLogging,
+    };
+
+    const allModules = await prisma.module.findMany({
+      where: {
+        OR: [
+          { code: { in: [...selection.selectedModules, "SELECT_PRINT", "KSNET_PAY"] } },
+          { isAutoIncluded: true },
+        ],
+      },
+      orderBy: { sortOrder: "asc" },
+    });
+    // 요청 폼과 같은 범위: 활성 + 외주 전용 제외
+    const unknown = selection.selectedModules.filter(
+      (code) => !allModules.some((m) => m.code === code && m.isActive && m.category !== "external")
+    );
+    if (unknown.length > 0) {
+      return NextResponse.json({ error: `선택할 수 없는 기능입니다: ${unknown.join(", ")}` }, { status: 400 });
+    }
+
+    const pricing = buildRequestItems({
+      selection,
+      modules: allModules,
+      priceRate: TYPE_PRICE_RATE[quote.type as QuoteType] ?? 1.0,
+      screenDevice: quote.screenDevice,
+      ksnetMerchantId: quote.ksnetMerchantId,
+    });
+
+    const before = await prisma.quoteItem.findMany({
+      where: { quoteId: id },
+      orderBy: { sortOrder: "asc" },
+      select: { itemName: true },
+    });
+    const beforeNames = before.map((it) => it.itemName);
+    const afterNames = pricing.items.map((it) => it.itemName);
+    const added = afterNames.filter((n) => !beforeNames.includes(n));
+    const removed = beforeNames.filter((n) => !afterNames.includes(n));
+    const flowLabel = (v: string) => SCREEN_FLOWS.find((f) => f.value === v)?.label ?? v;
+    let prevFlow: string[] = [];
+    try {
+      prevFlow = quote.screenComposition ? JSON.parse(quote.screenComposition) : [];
+    } catch {
+      prevFlow = [];
+    }
+    const flowChanged = prevFlow.join(",") !== selection.screenComposition.join(",");
+
+    // 금액은 dev_staff에게 비노출이라 이력 댓글에는 항목명만 남긴다
+    const lines = ["[기능 수정] 요청자가 기능 선택을 수정했습니다."];
+    if (added.length) lines.push(`- 추가: ${added.join(", ")}`);
+    if (removed.length) lines.push(`- 제외: ${removed.join(", ")}`);
+    if (flowChanged) {
+      lines.push(
+        `- 화면 구성: ${prevFlow.map(flowLabel).join(" → ") || "없음"} → ${selection.screenComposition.map(flowLabel).join(" → ") || "없음"}`
+      );
+    }
+    if (lines.length === 1) lines.push("- 변경 없음 (재산정만)");
+
+    try {
+      await prisma.$transaction(async (tx) => {
+        // 동시에 검토가 시작됐으면 덮어쓰지 않는다
+        const r = await tx.quote.updateMany({
+          where: { id, status: "pending" },
+          data: {
+            screenComposition: selection.screenComposition.length ? JSON.stringify(selection.screenComposition) : null,
+            subtotal: pricing.subtotal,
+            vat: pricing.vat,
+            totalAmount: pricing.totalAmount,
+          },
+        });
+        if (r.count === 0) throw new Error("NOT_PENDING");
+        await tx.quoteItem.deleteMany({ where: { quoteId: id } });
+        await tx.quoteItem.createMany({ data: pricing.items.map((it) => ({ ...it, quoteId: id })) });
+        await tx.quoteComment.create({ data: { quoteId: id, userId: user.id, content: lines.join("\n") } });
+      });
+    } catch (e) {
+      if (e instanceof Error && e.message === "NOT_PENDING") {
+        return NextResponse.json(
+          { error: "방금 검토가 시작되어 수정할 수 없습니다. 댓글로 요청해주세요." },
+          { status: 409 }
+        );
+      }
+      throw e;
+    }
+
+    const updated = await prisma.quote.findUnique({
+      where: { id },
+      include: {
+        items: { orderBy: { sortOrder: "asc" } },
+        createdBy: { select: { name: true, team: true, email: true } },
+        reviewedBy: { select: { name: true } },
+        comments: {
+          orderBy: { createdAt: "asc" },
+          include: { user: { select: { name: true, role: true, team: true } } },
+        },
       },
     });
     return NextResponse.json(updated);

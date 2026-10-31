@@ -201,8 +201,13 @@ export default function RequestPage() {
   const selectedModuleData = modules.filter(
     (m) => form.selectedModules.includes(m.code) || m.isAutoIncluded
   );
-  const ksnetExtra = form.useKsnetPayment ? applyPriceRate(KSNET_PRICE, priceRate) : 0;
-  const selectPrintExtra = form.screenComposition.includes("select_print") ? applyPriceRate(SELECT_PRINT_PRICE, priceRate) : 0;
+  // 모듈 카드로 이미 켠 경우 화면 구성/토글 쪽 금액은 더하지 않는다 (서버도 1회만 산정)
+  const ksnetExtra =
+    form.useKsnetPayment && !form.selectedModules.includes("KSNET_PAY") ? applyPriceRate(KSNET_PRICE, priceRate) : 0;
+  const selectPrintExtra =
+    form.screenComposition.includes("select_print") && !form.selectedModules.includes("SELECT_PRINT")
+      ? applyPriceRate(SELECT_PRINT_PRICE, priceRate)
+      : 0;
   const subtotal = selectedModuleData.reduce((s, m) => s + applyPriceRate(m.basePrice, priceRate), 0) + ksnetExtra + selectPrintExtra;
   const vat = Math.round(subtotal * 0.1);
   const total = subtotal + vat;

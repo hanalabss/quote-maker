@@ -33,6 +33,7 @@ import type { QuoteStatus, QuoteType } from "@/types";
 import { STATUS_LABELS, STATUS_COLORS, TYPE_LABELS, TYPE_COLORS } from "@/types";
 import { normalizeItemName, type BaselineMap } from "@/lib/baseline";
 import { getLifecycleBadge, todayStr } from "@/lib/lifecycle";
+import { RequestEditModal } from "@/components/RequestEditModal";
 
 interface QuoteItem {
   id: string;
@@ -302,6 +303,8 @@ export default function QuoteDetailPage({
   const [overrideReason, setOverrideReason] = useState("");
   // 기본정보 수정
   const [showBasicEditModal, setShowBasicEditModal] = useState(false);
+  // 기능 수정 (사업팀 본인, 대기중만)
+  const [showRequestEditModal, setShowRequestEditModal] = useState(false);
   const [basicForm, setBasicForm] = useState({
     eventDate: "", eventEndDate: "", venue: "", deadline: "",
     expectedVisitors: "", requesterContact: "", requesterEmail: "", notes: "",
@@ -872,6 +875,15 @@ export default function QuoteDetailPage({
                 >
                   <Edit3 className="w-4 h-4" />
                   수정
+                </button>
+              )}
+              {quote.status === "pending" && user?.role === "sales" && quote.createdById === user?.id && (
+                <button
+                  onClick={() => setShowRequestEditModal(true)}
+                  className="flex items-center gap-1 text-sm text-blue-600 hover:text-blue-800"
+                >
+                  <Edit3 className="w-4 h-4" />
+                  기능 수정
                 </button>
               )}
             </div>
@@ -1836,13 +1848,32 @@ export default function QuoteDetailPage({
         </div>
       )}
 
+      {/* 기능 수정 모달 (사업팀, 대기중) */}
+      {showRequestEditModal && (
+        <RequestEditModal
+          quoteId={quote.id}
+          quoteType={quote.type}
+          screenDevice={quote.screenDevice}
+          screenComposition={quote.screenComposition}
+          items={quote.items}
+          showPrice={showPrice}
+          onClose={() => setShowRequestEditModal(false)}
+          onSaved={(data) => {
+            setQuote(data);
+            setEditItems(data.items || []);
+            setComments(data.comments || []);
+            setShowRequestEditModal(false);
+          }}
+        />
+      )}
+
       {/* 기본정보 수정 모달 */}
       {showBasicEditModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={() => setShowBasicEditModal(false)} onKeyDown={(e) => { if (e.key === "Escape") setShowBasicEditModal(false); }}>
           <div className="bg-white rounded-2xl p-6 max-w-lg w-full max-h-[90vh] overflow-y-auto" role="dialog" aria-modal="true" aria-labelledby="basic-edit-title" onClick={(e) => e.stopPropagation()}>
             <h3 id="basic-edit-title" className="text-lg font-semibold mb-1">기본정보 수정</h3>
             <p className="text-xs text-gray-400 mb-4">
-              가격에 영향 없는 정보만 수정할 수 있습니다. 기능/항목 변경은 수정 요청을 이용하세요.
+              가격에 영향 없는 정보만 수정할 수 있습니다. 기능 변경은 대기중일 때 견적 항목의 "기능 수정", 검토가 시작된 뒤에는 댓글(승인 후에는 수정 요청)을 이용하세요.
             </p>
             <div className="space-y-3">
               <div className="grid grid-cols-2 gap-3">
