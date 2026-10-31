@@ -148,3 +148,30 @@ test("diffDays 기본/월경계/동일일", () => {
   assert.equal(diffDays("2026-07-24", "2026-07-24"), 0);
   assert.equal(diffDays("2026-07-24", "2026-07-21"), -3);
 });
+
+// ── 승인/보류 + 행사일 경과: 미진행 정리 대상 ──────────────────
+test("승인/보류인데 행사 종료일이 지나면 행사일 지남", () => {
+  for (const status of ["approved", "on_hold"]) {
+    assert.deepEqual(
+      getLifecycleBadge({ status, eventDate: "2026-07-20", eventEndDate: "2026-07-23" }, TODAY),
+      { kind: "event-passed" },
+      `status=${status}`
+    );
+  }
+});
+
+test("승인 — 행사 종료일이 오늘이거나 미래면 배지 없음", () => {
+  assert.equal(getLifecycleBadge({ status: "approved", eventDate: "2026-07-20", eventEndDate: TODAY }, TODAY), null);
+  assert.equal(getLifecycleBadge({ status: "approved", eventDate: "2026-08-01" }, TODAY), null);
+});
+
+test("승인 — 종료일 없으면 시작일 기준, 날짜 없으면 배지 없음", () => {
+  assert.deepEqual(getLifecycleBadge({ status: "on_hold", eventDate: "2026-07-01" }, TODAY), { kind: "event-passed" });
+  assert.equal(getLifecycleBadge({ status: "on_hold" }, TODAY), null);
+});
+
+test("미진행/완료/검토중은 행사일이 지나도 배지 없음", () => {
+  for (const status of ["lost", "completed", "reviewing", "pending"]) {
+    assert.equal(getLifecycleBadge({ status, eventEndDate: "2026-07-01" }, TODAY), null, `status=${status}`);
+  }
+});
