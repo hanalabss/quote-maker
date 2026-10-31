@@ -56,3 +56,7 @@ scripts/trim-*.js
 scripts/add-*.js
 scripts/download-*.js
 scripts/*.pdf
+
+# 세션 스크래치(스크린샷/스냅샷/고객 첨부 캡처) 및 일회성 스크립트
+.scratch/
+scripts/oneoff/
