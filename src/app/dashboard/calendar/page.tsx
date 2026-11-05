@@ -35,6 +35,7 @@ export default async function CalendarPage() {
       eventEndDate: true,
       devDeadline: true,
       devCompletedAt: true,
+      calendarColor: true,
       status: true,
       createdBy: { select: { name: true } },
     },
@@ -53,6 +54,7 @@ export default async function CalendarPage() {
       devDeadline: q.devDeadline,
       devCompletedAt: q.devCompletedAt?.toISOString() ?? null,
       status: q.status,
+      customColor: q.calendarColor,
       createdByName: q.createdBy?.name || null,
     }));
 

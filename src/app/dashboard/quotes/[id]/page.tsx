@@ -38,6 +38,7 @@ import { STATUS_LABELS, STATUS_COLORS, TYPE_LABELS, TYPE_COLORS } from "@/types"
 import { normalizeItemName, type BaselineMap } from "@/lib/baseline";
 import { getLifecycleBadge, todayStr } from "@/lib/lifecycle";
 import { RequestEditModal } from "@/components/RequestEditModal";
+import { CalendarColorPicker } from "@/components/quote/CalendarColorPicker";
 
 interface QuoteItem {
   id: string;
@@ -84,6 +85,7 @@ interface QuoteDetail {
   depositPaidAt: string | null;
   balancePaidAt: string | null;
   holdReason: string | null;
+  calendarColor: number | null;
   lostReason: string | null;
   subtotal: number;
   vat: number;
@@ -525,6 +527,20 @@ export default function QuoteDetailPage({
     const data = await res.json();
     if (res.ok) setQuote(data);
     else alert(data.error || "입금 기록에 실패했습니다");
+    setSaving(false);
+  }
+
+  // 달력 막대 색 지정 (dev 전용, null=자동 배정)
+  async function updateCalendarColor(color: number | null) {
+    setSaving(true);
+    const res = await fetch(`/api/quotes/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ calendarColor: color }),
+    });
+    const data = await res.json();
+    if (res.ok) setQuote((prev) => (prev ? { ...prev, calendarColor: data.calendarColor } : data));
+    else alert(data.error || "달력 색 저장에 실패했습니다");
     setSaving(false);
   }
 
@@ -1259,6 +1275,20 @@ export default function QuoteDetailPage({
                   </div>
                 )}
               </dl>
+
+              {/* 달력 색 — dev 전용. 달력에서 행사를 구분하는 막대 색 */}
+              {isDev && (
+                <div className="mt-4 pt-3 border-t border-emerald-200/60">
+                  <p className={`text-xs font-medium mb-2 ${quote.status === "completed" ? "text-slate-600" : "text-emerald-700"}`}>
+                    달력 색{quote.status === "completed" && <span className="ml-1 font-normal text-gray-400">(완료된 행사는 회색으로 표시)</span>}
+                  </p>
+                  <CalendarColorPicker
+                    value={quote.calendarColor ?? null}
+                    disabled={saving}
+                    onChange={updateCalendarColor}
+                  />
+                </div>
+              )}
 
               {/* 입금 기록 (계약금 40 / 잔금 60) — dev 전용 */}
               {isDev && (
