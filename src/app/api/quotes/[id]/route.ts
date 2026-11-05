@@ -12,6 +12,7 @@ import type { QuoteType } from "@/types";
 import { buildBaselineMap, normalizeItemName } from "@/lib/baseline";
 import { redactQuotePrices } from "@/lib/priceVisibility";
 import { buildRequestItems, SCREEN_FLOWS } from "@/lib/requestItems";
+import { isValidCalendarColor } from "@/lib/calendar";
 
 // 승인 가드레일: 단가·납기 자동 검증. 경고 목록 반환 (soft gate — overrideReason으로 강행 가능)
 async function collectApprovalWarnings(quote: {
@@ -321,6 +322,26 @@ export async function PATCH(
     const updated = await prisma.quote.update({
       where: { id },
       data: { devCompletedAt: body.devCompleted ? new Date() : null },
+      include: {
+        items: { orderBy: { sortOrder: "asc" } },
+        createdBy: { select: { name: true, team: true, email: true, role: true } },
+        reviewedBy: { select: { name: true } },
+      },
+    });
+    return NextResponse.json(redactQuotePrices(updated, user.role));
+  }
+
+  // 달력 색 지정 — dev(관리자) 전용. null이면 자동 배정으로 되돌림
+  if ("calendarColor" in body) {
+    if (user.role !== "dev") {
+      return NextResponse.json({ error: "권한이 없습니다" }, { status: 403 });
+    }
+    if (body.calendarColor !== null && !isValidCalendarColor(body.calendarColor)) {
+      return NextResponse.json({ error: "잘못된 색입니다" }, { status: 400 });
+    }
+    const updated = await prisma.quote.update({
+      where: { id },
+      data: { calendarColor: body.calendarColor },
       include: {
         items: { orderBy: { sortOrder: "asc" } },
         createdBy: { select: { name: true, team: true, email: true, role: true } },

@@ -1,19 +1,76 @@
 "use client";
 
-import { useState } from "react";
-import { ChevronLeft, ChevronRight, CalendarDays, Clock, AlertTriangle } from "lucide-react";
-import { getMonthLabel, parseYMD, type CalendarEvent } from "@/lib/calendar";
+import { useMemo, useState } from "react";
+import { ChevronLeft, ChevronRight, CalendarDays, Clock, AlertTriangle, Palette, X } from "lucide-react";
+import { assignEventColors, getMonthLabel, paletteOf, parseYMD, type CalendarEvent } from "@/lib/calendar";
 import { CalendarGrid } from "./CalendarGrid";
+import { CalendarColorPicker } from "@/components/quote/CalendarColorPicker";
 import { TYPE_LABELS } from "@/types";
 import type { QuoteType } from "@/types";
 
 export function CalendarClient({
-  events,
+  events: rawEvents,
   userRole,
 }: {
   events: CalendarEvent[];
   userRole: string;
 }) {
+  const isDev = userRole === "dev";
+  // 이 화면에서 바꾼 색 (저장 성공분) — 새로고침 없이 바로 반영
+  const [colorOverrides, setColorOverrides] = useState<Record<string, number | null>>({});
+  const [colorMode, setColorMode] = useState(false);
+  const [picker, setPicker] = useState<{ event: CalendarEvent; top: number; left: number } | null>(null);
+  const [savingColor, setSavingColor] = useState(false);
+  const [colorError, setColorError] = useState("");
+
+  // 행사마다 구분 색 배정 — 막대·마감 색띠·진행 현황 점이 같은 색
+  const events = useMemo(
+    () =>
+      assignEventColors(
+        rawEvents.map((ev) => (ev.id in colorOverrides ? { ...ev, customColor: colorOverrides[ev.id] } : ev))
+      ),
+    [rawEvents, colorOverrides]
+  );
+  // 이 행사를 "자동"으로 되돌리면 어떤 색이 되는지 (다른 행사의 지정 색은 유지한 채 계산)
+  function autoColorOf(id: string) {
+    return assignEventColors(events.map((ev) => (ev.id === id ? { ...ev, customColor: null } : ev))).find(
+      (ev) => ev.id === id
+    )?.colorIndex;
+  }
+
+  function openPicker(event: CalendarEvent, anchor: DOMRect) {
+    setColorError("");
+    const width = 300;
+    setPicker({
+      event,
+      top: anchor.bottom + 6,
+      left: Math.max(8, Math.min(anchor.left, window.innerWidth - width - 8)),
+    });
+  }
+
+  async function saveColor(color: number | null) {
+    if (!picker) return;
+    setSavingColor(true);
+    setColorError("");
+    try {
+      const res = await fetch(`/api/quotes/${picker.event.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ calendarColor: color }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        setColorError(data.error || "색 저장에 실패했습니다");
+        return;
+      }
+      setColorOverrides((prev) => ({ ...prev, [picker.event.id]: color }));
+      setPicker(null);
+    } catch {
+      setColorError("색 저장에 실패했습니다");
+    } finally {
+      setSavingColor(false);
+    }
+  }
   const today = new Date();
   const [year, setYear] = useState(today.getFullYear());
   const [month, setMonth] = useState(today.getMonth());
@@ -96,7 +153,10 @@ export function CalendarClient({
                     {ev.diff < 0 ? `${Math.abs(ev.diff)}일 초과` : ev.diff === 0 ? "오늘" : `D-${ev.diff}`}
                   </span>
                   <div className="flex-1 min-w-0">
-                    <div className="text-sm font-medium truncate">{ev.eventName}</div>
+                    <div className="text-sm font-medium truncate flex items-center gap-1.5">
+                      <span className={`shrink-0 w-2.5 h-2.5 rounded-full ${paletteOf(ev)?.dot || "bg-gray-300"}`} />
+                      {ev.eventName}
+                    </div>
                     <div className="text-xs text-gray-400">
                       마감 {ev.devDeadline} · 행사 {ev.confirmedDate}
                       {ev.eventEndDate && ev.eventEndDate !== ev.confirmedDate ? ` ~ ${ev.eventEndDate}` : ""}
@@ -137,36 +197,97 @@ export function CalendarClient({
             <ChevronRight className="w-5 h-5" />
           </button>
         </div>
-        <button
-          onClick={goToday}
-          className="px-3 py-1.5 text-sm border rounded-lg hover:bg-gray-50 transition-colors"
-        >
-          오늘
-        </button>
+        <div className="flex items-center gap-2">
+          {isDev && (
+            <button
+              onClick={() => {
+                setColorMode((m) => !m);
+                setPicker(null);
+              }}
+              aria-pressed={colorMode}
+              className={`px-3 py-1.5 text-sm border rounded-lg flex items-center gap-1.5 transition-colors ${
+                colorMode ? "bg-gray-900 text-white border-gray-900" : "hover:bg-gray-50"
+              }`}
+            >
+              <Palette className="w-4 h-4" />
+              {colorMode ? "색 지정 끝내기" : "색 지정"}
+            </button>
+          )}
+          <button
+            onClick={goToday}
+            className="px-3 py-1.5 text-sm border rounded-lg hover:bg-gray-50 transition-colors"
+          >
+            오늘
+          </button>
+        </div>
       </div>
+
+      {colorMode && (
+        <div className="mb-4 px-3 py-2 rounded-lg bg-gray-900 text-white text-xs">
+          색을 바꿀 행사 막대를 누르세요. 지정한 색은 모든 사람의 달력에 똑같이 보입니다.
+        </div>
+      )}
 
       {/* 범례 */}
       <div className="flex flex-wrap gap-3 mb-4 text-xs">
         <span className="flex items-center gap-1">
-          <span className="w-3 h-3 rounded bg-blue-500" />
-          렌탈
-        </span>
-        <span className="flex items-center gap-1">
-          <span className="w-3 h-3 rounded bg-teal-500" />
-          재행사
+          <span className="flex">
+            <span className="w-3 h-3 rounded-l bg-blue-500" />
+            <span className="w-3 h-3 bg-emerald-600" />
+            <span className="w-3 h-3 rounded-r bg-orange-500" />
+          </span>
+          행사별 색 구분
         </span>
         <span className="flex items-center gap-1">
           <span className="w-3 h-3 rounded bg-gray-200" />
           완료된 행사
         </span>
         <span className="flex items-center gap-1">
-          <span className="w-3 h-3 rounded bg-red-50 border border-red-200" />
-          개발 마감 (배포 전)
+          <span className="w-3 h-3 rounded bg-red-50 border border-red-200 border-l-4 border-l-blue-500" />
+          개발 마감 (배포 전, 왼쪽 색 = 해당 행사)
         </span>
       </div>
 
       {/* 달력 그리드 */}
-      <CalendarGrid year={year} month={month} events={events} />
+      <CalendarGrid
+        year={year}
+        month={month}
+        events={events}
+        onEventClick={colorMode ? openPicker : undefined}
+      />
+
+      {/* 색 선택 팝오버 (관리자 색 지정 모드) */}
+      {picker && (
+        <>
+          <div className="fixed inset-0 z-40" onClick={() => setPicker(null)} aria-hidden="true" />
+          <div
+            role="dialog"
+            aria-label={`${picker.event.eventName} 달력 색`}
+            className="fixed z-50 w-[300px] bg-white rounded-xl border shadow-lg p-3"
+            style={{ top: picker.top, left: picker.left }}
+          >
+            <div className="flex items-start justify-between gap-2 mb-2">
+              <div className="min-w-0">
+                <div className="text-sm font-medium truncate">{picker.event.eventName}</div>
+                <div className="text-xs text-gray-400">{picker.event.quoteNumber}</div>
+              </div>
+              <button onClick={() => setPicker(null)} className="p-1 rounded hover:bg-gray-100" aria-label="닫기">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <CalendarColorPicker
+              value={events.find((e) => e.id === picker.event.id)?.customColor ?? null}
+              autoIndex={autoColorOf(picker.event.id)}
+              disabled={savingColor}
+              onChange={saveColor}
+            />
+            {picker.event.status === "completed" && (
+              <p className="mt-2 text-xs text-gray-400">완료된 행사는 회색으로 표시됩니다.</p>
+            )}
+            {colorError && <p className="mt-2 text-xs text-red-600">{colorError}</p>}
+          </div>
+        </>
+      )}
 
       {/* 이번 달 이벤트 목록 (모바일용) */}
       <div className="mt-6 sm:hidden">

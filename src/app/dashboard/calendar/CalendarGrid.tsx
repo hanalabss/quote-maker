@@ -13,16 +13,20 @@ export function CalendarGrid({
   year,
   month,
   events,
+  onEventClick,
 }: {
   year: number;
   month: number;
   events: CalendarEvent[];
+  /** 지정하면 막대 클릭 시 이동 대신 이 함수를 부른다 (관리자 색 지정 모드) */
+  onEventClick?: (event: CalendarEvent, anchor: DOMRect) => void;
 }) {
   const router = useRouter();
   const weeks = getMonthGrid(year, month);
 
-  function goToQuote(id: string) {
-    router.push(`/dashboard/quotes/${id}`);
+  function handleClick(event: CalendarEvent, e: React.MouseEvent<HTMLElement>) {
+    if (onEventClick) onEventClick(event, e.currentTarget.getBoundingClientRect());
+    else router.push(`/dashboard/quotes/${event.id}`);
   }
 
   return (
@@ -110,10 +114,10 @@ export function CalendarGrid({
                       event={s.event}
                       continuesBefore={s.continuesBefore}
                       continuesAfter={s.continuesAfter}
-                      onClick={() => goToQuote(s.event.id)}
+                      onClick={(e) => handleClick(s.event, e)}
                     />
                   ) : (
-                    <DeadlineDot event={s.event} onClick={() => goToQuote(s.event.id)} />
+                    <DeadlineDot event={s.event} onClick={(e) => handleClick(s.event, e)} />
                   )}
                 </div>
               ))}
