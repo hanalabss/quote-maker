@@ -509,11 +509,13 @@ export async function PATCH(
 
   // 기본정보 수정 (가격 무관 필드 — 사업팀 본인 견적 또는 dev)
   // 보류(on_hold)도 허용: 보류 사유가 대개 일정 변경이라 행사일/납기 갱신이 필요
+  // 확정(confirmed)·완료(completed) 이후에도 금액 무관 정보는 바뀐다(일정 연기, 장비 변경, 연락처 보완).
+  // 금액·항목은 계속 잠그고, 바뀐 내용은 이력 댓글로 남긴다. 완료 건은 dev만.
   if (body.basicInfo && typeof body.basicInfo === "object") {
-    const editableStates = ["pending", "reviewing", "approved", "on_hold"];
+    const editableStates = ["pending", "reviewing", "approved", "on_hold", "confirmed", "completed"];
     if (!editableStates.includes(quote.status)) {
       return NextResponse.json(
-        { error: "확정/완료된 견적은 기본정보를 수정할 수 없습니다" },
+        { error: "반려/미진행 견적은 기본정보를 수정할 수 없습니다" },
         { status: 400 }
       );
     }
@@ -521,12 +523,16 @@ export async function PATCH(
       if (quote.createdById !== user.id) {
         return NextResponse.json({ error: "본인 견적만 수정할 수 있습니다" }, { status: 403 });
       }
+      if (quote.status === "completed") {
+        return NextResponse.json({ error: "완료된 견적은 개발팀만 수정할 수 있습니다" }, { status: 403 });
+      }
     } else if (user.role !== "dev") {
       return NextResponse.json({ error: "권한이 없습니다" }, { status: 403 });
     }
 
+    const isConfirmedStage = quote.status === "confirmed" || quote.status === "completed";
     // 가격에 영향 없는 필드만 화이트리스트 (모듈/화면구성 변경은 수정 요청 플로우 사용)
-    const allowedFields = [
+    const allowedFields: string[] = [
       "eventDate",
       "eventEndDate",
       "venue",
@@ -535,25 +541,152 @@ export async function PATCH(
       "requesterContact",
       "requesterEmail",
       "notes",
-    ] as const;
+      "printerType",
+      "printSize",
+      "networkType",
+      "screenResolution",
+    ];
+    // 확정 이후 일정은 확정 필드(달력·홈이 쓰는 값)로 관리. 개발 마감일은 dev만.
+    if (isConfirmedStage) {
+      allowedFields.push("confirmedDate", "confirmedEndDate");
+      if (user.role === "dev") allowedFields.push("devDeadline");
+    }
+    const dateFields = ["eventDate", "eventEndDate", "deadline", "confirmedDate", "confirmedEndDate", "devDeadline"];
     const basicData: Record<string, string | null> = {};
     for (const key of allowedFields) {
       if (key in body.basicInfo) {
-        const v = body.basicInfo[key];
-        basicData[key] = v === "" || v === null ? null : String(v);
+        const raw = body.basicInfo[key];
+        const v = raw === "" || raw === null || raw === undefined ? null : String(raw).trim() || null;
+        if (v && dateFields.includes(key) && !/^\d{4}-\d{2}-\d{2}$/.test(v)) {
+          return NextResponse.json({ error: "날짜 형식이 올바르지 않습니다" }, { status: 400 });
+        }
+        basicData[key] = v;
       }
     }
-    if (Object.keys(basicData).length === 0) {
-      return NextResponse.json({ error: "수정할 내용이 없습니다" }, { status: 400 });
+    if (isConfirmedStage && quote.type !== "sale") {
+      // 확정 행사일은 비울 수 없다 (매출 인식·달력 기준)
+      if (("confirmedDate" in basicData && !basicData.confirmedDate) || ("confirmedEndDate" in basicData && !basicData.confirmedEndDate)) {
+        return NextResponse.json({ error: "확정된 견적은 행사 시작일/종료일을 비울 수 없습니다" }, { status: 400 });
+      }
+    }
+    if (isConfirmedStage && "devDeadline" in basicData && !basicData.devDeadline) {
+      return NextResponse.json({ error: "확정된 견적은 개발 마감일을 비울 수 없습니다" }, { status: 400 });
+    }
+    const startKey = isConfirmedStage ? "confirmedDate" : "eventDate";
+    const endKey = isConfirmedStage ? "confirmedEndDate" : "eventEndDate";
+    const cur = quote as unknown as Record<string, string | null>;
+    const start = startKey in basicData ? basicData[startKey] : cur[startKey];
+    const end = endKey in basicData ? basicData[endKey] : cur[endKey];
+    if (start && end && end < start) {
+      return NextResponse.json({ error: "행사 종료일이 시작일보다 빠릅니다" }, { status: 400 });
     }
 
-    const updated = await prisma.quote.update({
+    // 실제로 바뀐 필드만 반영 + 이력 댓글
+    const FIELD_LABELS: Record<string, string> = {
+      eventDate: "행사 시작일", eventEndDate: "행사 종료일", venue: "장소", deadline: "납기일",
+      expectedVisitors: "예상 방문객", requesterContact: "연락처", requesterEmail: "이메일", notes: "기타 요청사항",
+      printerType: "프린터", printSize: "인쇄 사이즈", networkType: "네트워크", screenResolution: "해상도",
+      confirmedDate: "확정 행사 시작일", confirmedEndDate: "확정 행사 종료일", devDeadline: "개발 마감일",
+    };
+    const changed: Record<string, string | null> = {};
+    const lines: string[] = [];
+    for (const [key, v] of Object.entries(basicData)) {
+      const before = cur[key] ?? null;
+      if (before === v) continue;
+      changed[key] = v;
+      lines.push(
+        key === "notes"
+          ? `- ${FIELD_LABELS[key]} 수정`
+          : `- ${FIELD_LABELS[key]}: ${before ?? "없음"} → ${v ?? "없음"}`
+      );
+    }
+    if (lines.length === 0) {
+      return NextResponse.json({ error: "바뀐 내용이 없습니다" }, { status: 400 });
+    }
+
+    // 대기중(요청자 본인 편집 단계)은 이력 댓글 생략 — 검토 시작 이후 변경만 기록
+    const logHistory = quote.status !== "pending";
+    await prisma.$transaction(async (tx) => {
+      await tx.quote.update({ where: { id }, data: changed });
+      if (logHistory) {
+        await tx.quoteComment.create({
+          data: { quoteId: id, userId: user.id, content: ["[정보 수정]", ...lines].join("\n") },
+        });
+      }
+    });
+
+    const updated = await prisma.quote.findUnique({
       where: { id },
-      data: basicData,
       include: {
         items: { orderBy: { sortOrder: "asc" } },
         createdBy: { select: { name: true, team: true, email: true, role: true } },
         reviewedBy: { select: { name: true } },
+        comments: {
+          orderBy: { createdAt: "asc" },
+          include: { user: { select: { name: true, role: true, team: true } } },
+        },
+      },
+    });
+    return NextResponse.json(redactQuotePrices(updated, user.role));
+  }
+
+  // 첨부 추가 (시안 등은 대개 확정 후에 들어온다) — 사업팀 본인 또는 dev, 반려/미진행 제외
+  // 파일 자체는 /api/upload로 먼저 올리고, 여기서는 메타데이터만 붙인다. 삭제는 지원하지 않음(추가만).
+  if (Array.isArray(body.addAttachments)) {
+    if (["rejected", "lost"].includes(quote.status)) {
+      return NextResponse.json({ error: "반려/미진행 견적에는 첨부를 추가할 수 없습니다" }, { status: 400 });
+    }
+    if (user.role === "sales") {
+      if (quote.createdById !== user.id) {
+        return NextResponse.json({ error: "본인 견적만 수정할 수 있습니다" }, { status: 403 });
+      }
+    } else if (user.role !== "dev") {
+      return NextResponse.json({ error: "권한이 없습니다" }, { status: 403 });
+    }
+    type Att = { fileName: string; originalName: string; size: number; mimeType: string };
+    const incoming = body.addAttachments as unknown[];
+    const valid = (a: unknown): a is Att => {
+      if (!a || typeof a !== "object") return false;
+      const o = a as Record<string, unknown>;
+      return (
+        typeof o.fileName === "string" &&
+        /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}(\.[A-Za-z0-9]{1,10})?$/.test(o.fileName) &&
+        typeof o.originalName === "string" && o.originalName.length > 0 && o.originalName.length <= 255 &&
+        typeof o.size === "number" && o.size >= 0 && o.size <= 20 * 1024 * 1024 &&
+        typeof o.mimeType === "string" && o.mimeType.length <= 200
+      );
+    };
+    if (incoming.length === 0 || incoming.length > 20 || !incoming.every(valid)) {
+      return NextResponse.json({ error: "첨부 정보가 올바르지 않습니다" }, { status: 400 });
+    }
+    const existing = (Array.isArray(quote.attachments) ? quote.attachments : []) as unknown as Att[];
+    const known = new Set(existing.map((a) => a.fileName));
+    const toAdd = (incoming as Att[])
+      .filter((a) => !known.has(a.fileName))
+      .map((a) => ({ fileName: a.fileName, originalName: a.originalName, size: a.size, mimeType: a.mimeType }));
+    if (toAdd.length === 0) {
+      return NextResponse.json({ error: "이미 첨부된 파일입니다" }, { status: 400 });
+    }
+    await prisma.$transaction(async (tx) => {
+      await tx.quote.update({ where: { id }, data: { attachments: [...existing, ...toAdd] } });
+      await tx.quoteComment.create({
+        data: {
+          quoteId: id,
+          userId: user.id,
+          content: ["[첨부 추가]", ...toAdd.map((a) => `- ${a.originalName}`)].join("\n"),
+        },
+      });
+    });
+    const updated = await prisma.quote.findUnique({
+      where: { id },
+      include: {
+        items: { orderBy: { sortOrder: "asc" } },
+        createdBy: { select: { name: true, team: true, email: true, role: true } },
+        reviewedBy: { select: { name: true } },
+        comments: {
+          orderBy: { createdAt: "asc" },
+          include: { user: { select: { name: true, role: true, team: true } } },
+        },
       },
     });
     return NextResponse.json(redactQuotePrices(updated, user.role));
