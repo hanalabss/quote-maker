@@ -41,9 +41,11 @@ export function CalendarClient({
   function openPicker(event: CalendarEvent, anchor: DOMRect) {
     setColorError("");
     const width = 300;
+    const height = 140; // 대략적인 팝오버 높이 — 아래 공간이 모자라면 막대 위로 띄움
+    const below = anchor.bottom + 6;
     setPicker({
       event,
-      top: anchor.bottom + 6,
+      top: below + height > window.innerHeight ? Math.max(8, anchor.top - height - 6) : below,
       left: Math.max(8, Math.min(anchor.left, window.innerWidth - width - 8)),
     });
   }
