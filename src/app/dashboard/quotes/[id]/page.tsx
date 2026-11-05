@@ -383,11 +383,24 @@ export default function QuoteDetailPage({
   const [basicForm, setBasicForm] = useState({
     eventDate: "", eventEndDate: "", venue: "", deadline: "",
     expectedVisitors: "", requesterContact: "", requesterEmail: "", notes: "",
+    printerType: "", printSize: "", networkType: "", screenResolution: "",
+    confirmedDate: "", confirmedEndDate: "", devDeadline: "",
   });
+  const [attachUploading, setAttachUploading] = useState(false);
+  const attachInputRef = useRef<HTMLInputElement>(null);
   // baseline 시세 (편집 모드 배지)
   const [baselineStats, setBaselineStats] = useState<BaselineMap | null>(null);
   const { user, isDev, isDevTeam } = useAuth();
   const showPrice = user?.role === "dev" || user?.role === "sales";
+  const isOwnerOrDev = !!quote && (isDev || (user?.role === "sales" && quote.createdById === user?.id));
+  // 금액 무관 정보: 확정 이후에도 수정 가능(완료는 dev만). 반려·미진행 제외
+  const canEditInfo =
+    !!quote &&
+    isOwnerOrDev &&
+    (["pending", "reviewing", "approved", "on_hold", "confirmed"].includes(quote.status) ||
+      (quote.status === "completed" && isDev));
+  const canAddAttachment = !!quote && isOwnerOrDev && !["rejected", "lost"].includes(quote.status);
+  const isConfirmedStage = quote?.status === "confirmed" || quote?.status === "completed";
   const router = useRouter();
 
   useEffect(() => {
@@ -569,8 +582,59 @@ export default function QuoteDetailPage({
       requesterContact: quote.requesterContact || "",
       requesterEmail: quote.requesterEmail || "",
       notes: quote.notes || "",
+      printerType: quote.printerType || "",
+      printSize: quote.printSize || "",
+      networkType: quote.networkType || "",
+      screenResolution: quote.screenResolution || "",
+      confirmedDate: quote.confirmedDate || "",
+      confirmedEndDate: quote.confirmedEndDate || "",
+      devDeadline: quote.devDeadline || "",
     });
     setShowBasicEditModal(true);
+  }
+
+  // 확정 이후에는 요청서 일정(eventDate/deadline) 대신 확정 일정·개발 마감일을 보낸다
+  function basicInfoPayload() {
+    const { confirmedDate, confirmedEndDate, devDeadline, eventDate, eventEndDate, deadline, ...rest } = basicForm;
+    if (!quote) return rest;
+    if (quote.status === "confirmed" || quote.status === "completed") {
+      return {
+        ...rest,
+        ...(quote.type !== "sale" ? { confirmedDate, confirmedEndDate } : {}),
+        ...(isDev ? { devDeadline } : {}),
+      };
+    }
+    return { ...rest, eventDate, eventEndDate, deadline };
+  }
+
+  async function addAttachments(files: FileList | null) {
+    if (!files || files.length === 0) return;
+    setAttachUploading(true);
+    try {
+      const formData = new FormData();
+      Array.from(files).forEach((file) => formData.append("files", file));
+      const up = await fetch("/api/upload", { method: "POST", body: formData });
+      const uploaded = await up.json();
+      if (!up.ok) {
+        alert(uploaded.error || "파일 업로드에 실패했습니다");
+        return;
+      }
+      const res = await fetch(`/api/quotes/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ addAttachments: uploaded }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setQuote(data);
+        if (data.comments) setComments(data.comments);
+      } else {
+        alert(data.error || "첨부 추가에 실패했습니다");
+      }
+    } finally {
+      setAttachUploading(false);
+      if (attachInputRef.current) attachInputRef.current.value = "";
+    }
   }
 
   async function saveBasicInfo() {
@@ -578,11 +642,12 @@ export default function QuoteDetailPage({
     const res = await fetch(`/api/quotes/${id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ basicInfo: basicForm }),
+      body: JSON.stringify({ basicInfo: basicInfoPayload() }),
     });
     const data = await res.json();
     if (res.ok) {
       setQuote(data);
+      if (data.comments) setComments(data.comments);
       setShowBasicEditModal(false);
     } else {
       alert(data.error || "기본정보 수정에 실패했습니다");
@@ -802,8 +867,7 @@ export default function QuoteDetailPage({
           <div className="bg-white rounded-xl border p-5">
             <div className="flex items-center justify-between mb-3">
               <h3 className="font-medium">행사 정보</h3>
-              {["pending", "reviewing", "approved", "on_hold"].includes(quote.status) &&
-                (isDev || quote.createdById === user?.id) && (
+              {canEditInfo && (
                   <button
                     onClick={openBasicEditModal}
                     className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800"
@@ -937,14 +1001,38 @@ export default function QuoteDetailPage({
             </div>
           )}
 
-          {quote.attachments && quote.attachments.length > 0 && (
+          {((quote.attachments && quote.attachments.length > 0) || canAddAttachment) && (
             <div className="bg-white rounded-xl border p-5">
-              <h3 className="font-medium mb-3 flex items-center gap-1.5">
-                <Paperclip className="w-4 h-4" />
-                첨부 파일 ({quote.attachments.length})
-              </h3>
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="font-medium flex items-center gap-1.5">
+                  <Paperclip className="w-4 h-4" />
+                  첨부 파일 ({quote.attachments?.length ?? 0})
+                </h3>
+                {canAddAttachment && (
+                  <>
+                    <input
+                      ref={attachInputRef}
+                      type="file"
+                      multiple
+                      className="hidden"
+                      onChange={(e) => addAttachments(e.target.files)}
+                    />
+                    <button
+                      onClick={() => attachInputRef.current?.click()}
+                      disabled={attachUploading}
+                      className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800 disabled:opacity-50"
+                    >
+                      {attachUploading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Paperclip className="w-3.5 h-3.5" />}
+                      파일 추가
+                    </button>
+                  </>
+                )}
+              </div>
+              {(!quote.attachments || quote.attachments.length === 0) && (
+                <p className="text-xs text-gray-400">첨부 파일이 없습니다. 시안 등은 확정 후에도 추가할 수 있습니다.</p>
+              )}
               <div className="space-y-2">
-                {quote.attachments.map((file) => (
+                {(quote.attachments ?? []).map((file) => (
                   <a
                     key={file.fileName}
                     href={`/api/attachments/${file.fileName}`}
@@ -1995,8 +2083,41 @@ export default function QuoteDetailPage({
             <h3 id="basic-edit-title" className="text-lg font-semibold mb-1">기본정보 수정</h3>
             <p className="text-xs text-gray-400 mb-4">
               가격에 영향 없는 정보만 수정할 수 있습니다. 기능 변경은 대기중일 때 견적 항목의 "기능 수정", 검토가 시작된 뒤에는 댓글(승인 후에는 수정 요청)을 이용하세요.
+              {quote.status !== "pending" && " 바꾼 내용은 댓글에 이력으로 남습니다."}
             </p>
             <div className="space-y-3">
+              {isConfirmedStage && (
+                <div className="space-y-3 rounded-lg bg-blue-50/60 p-3">
+                  <p className="text-xs font-medium text-blue-800">확정 일정 (달력·홈 기준)</p>
+                  {quote.type !== "sale" && (
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label htmlFor="be-confirmedDate" className="block text-xs font-medium text-gray-600 mb-1">행사 시작일</label>
+                        <input id="be-confirmedDate" type="date" value={basicForm.confirmedDate}
+                          onChange={(e) => setBasicForm((p) => ({ ...p, confirmedDate: e.target.value }))}
+                          className="w-full px-3 py-2 border rounded-lg text-sm bg-white focus:ring-2 focus:ring-blue-500 outline-none" />
+                      </div>
+                      <div>
+                        <label htmlFor="be-confirmedEndDate" className="block text-xs font-medium text-gray-600 mb-1">행사 종료일</label>
+                        <input id="be-confirmedEndDate" type="date" value={basicForm.confirmedEndDate}
+                          onChange={(e) => setBasicForm((p) => ({ ...p, confirmedEndDate: e.target.value }))}
+                          className="w-full px-3 py-2 border rounded-lg text-sm bg-white focus:ring-2 focus:ring-blue-500 outline-none" />
+                      </div>
+                    </div>
+                  )}
+                  {isDev ? (
+                    <div>
+                      <label htmlFor="be-devDeadline" className="block text-xs font-medium text-gray-600 mb-1">개발 마감일</label>
+                      <input id="be-devDeadline" type="date" value={basicForm.devDeadline}
+                        onChange={(e) => setBasicForm((p) => ({ ...p, devDeadline: e.target.value }))}
+                        className="w-full px-3 py-2 border rounded-lg text-sm bg-white focus:ring-2 focus:ring-blue-500 outline-none" />
+                    </div>
+                  ) : (
+                    <p className="text-xs text-gray-500">개발 마감일({quote.devDeadline || "-"}) 변경은 개발팀에 댓글로 요청해주세요.</p>
+                  )}
+                </div>
+              )}
+              {!isConfirmedStage && (
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label htmlFor="be-eventDate" className="block text-xs font-medium text-gray-600 mb-1">행사 시작일</label>
@@ -2011,6 +2132,7 @@ export default function QuoteDetailPage({
                     className="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none" />
                 </div>
               </div>
+              )}
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label htmlFor="be-venue" className="block text-xs font-medium text-gray-600 mb-1">행사 장소</label>
@@ -2018,12 +2140,14 @@ export default function QuoteDetailPage({
                     onChange={(e) => setBasicForm((p) => ({ ...p, venue: e.target.value }))}
                     className="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none" />
                 </div>
+                {!isConfirmedStage && (
                 <div>
                   <label htmlFor="be-deadline" className="block text-xs font-medium text-gray-600 mb-1">납기일</label>
                   <input id="be-deadline" type="date" value={basicForm.deadline}
                     onChange={(e) => setBasicForm((p) => ({ ...p, deadline: e.target.value }))}
                     className="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none" />
                 </div>
+                )}
               </div>
               <div>
                 <label htmlFor="be-visitors" className="block text-xs font-medium text-gray-600 mb-1">예상 방문객</label>
@@ -2043,6 +2167,47 @@ export default function QuoteDetailPage({
                   <input id="be-email" type="email" value={basicForm.requesterEmail}
                     onChange={(e) => setBasicForm((p) => ({ ...p, requesterEmail: e.target.value }))}
                     className="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none" />
+                </div>
+              </div>
+              <div>
+                <p className="text-xs font-medium text-gray-600 mb-2">장비/환경</p>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label htmlFor="be-printerType" className="block text-xs text-gray-500 mb-1">프린터</label>
+                    <input id="be-printerType" type="text" list="be-printer-options" value={basicForm.printerType}
+                      onChange={(e) => setBasicForm((p) => ({ ...p, printerType: e.target.value }))}
+                      className="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none" />
+                    <datalist id="be-printer-options">
+                      {["Smart31", "Smart51", "Smart81", "Joyspace", "Luka", "none"].map((v) => <option key={v} value={v} />)}
+                    </datalist>
+                  </div>
+                  <div>
+                    <label htmlFor="be-printSize" className="block text-xs text-gray-500 mb-1">인쇄 사이즈</label>
+                    <input id="be-printSize" type="text" value={basicForm.printSize}
+                      onChange={(e) => setBasicForm((p) => ({ ...p, printSize: e.target.value }))}
+                      className="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none" />
+                  </div>
+                  <div>
+                    <label htmlFor="be-networkType" className="block text-xs text-gray-500 mb-1">네트워크</label>
+                    <select id="be-networkType" value={basicForm.networkType}
+                      onChange={(e) => setBasicForm((p) => ({ ...p, networkType: e.target.value }))}
+                      className="w-full px-3 py-2 border rounded-lg text-sm bg-white focus:ring-2 focus:ring-blue-500 outline-none">
+                      <option value="">미정</option>
+                      <option value="wifi">Wi-Fi</option>
+                      <option value="offline">오프라인</option>
+                      <option value="both">Wi-Fi + 오프라인 모두</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label htmlFor="be-screenResolution" className="block text-xs text-gray-500 mb-1">해상도</label>
+                    <input id="be-screenResolution" type="text" list="be-resolution-options" value={basicForm.screenResolution}
+                      onChange={(e) => setBasicForm((p) => ({ ...p, screenResolution: e.target.value }))}
+                      className="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none" />
+                    <datalist id="be-resolution-options">
+                      <option value="1080x1920" />
+                      <option value="1920x1080" />
+                    </datalist>
+                  </div>
                 </div>
               </div>
               <div>
