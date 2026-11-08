@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { quoteScopeWhere } from "@/lib/quoteAccess";
 import { prisma } from "@/lib/db";
 import { buildRequestItems } from "@/lib/requestItems";
 import { sendQuoteNotification } from "@/lib/email";
@@ -47,12 +48,9 @@ export async function GET(request: NextRequest) {
     const status = searchParams.get("status");
 
     // sales 역할은 자기가 만든 견적만 조회, 외주 프로젝트는 dev만 조회 가능
-    const where: Record<string, unknown> = {};
-    if (user.role !== "dev") where.isExternal = false;
+    // sales = 본인 견적, dev_staff = 담당 견적, 외주 = dev만
+    const where: Record<string, unknown> = quoteScopeWhere(user);
     if (status) where.status = status;
-    if (user.role === "sales") {
-      where.createdById = user.id;
-    }
 
     const quotes = await prisma.quote.findMany({
       where,

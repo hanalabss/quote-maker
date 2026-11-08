@@ -15,7 +15,7 @@ model User {
   password  String
   name      String
   email     String   @unique
-  role      String   @default("sales") // sales | dev
+  role      String   @default("sales") // sales | dev(관리자) | dev_staff(개발 담당, 금액 비노출)
   phone     String?
   team      String?
   position  String?  // 직급: 팀장, 대리, 이사 등
@@ -23,6 +23,7 @@ model User {
 
   createdQuotes  Quote[] @relation("CreatedBy")
   reviewedQuotes Quote[] @relation("ReviewedBy")
+  assignedQuotes Quote[] @relation("DevAssignee")
   comments       QuoteComment[]
 }
 
@@ -105,6 +106,9 @@ model Quote {
   createdBy       User?    @relation("CreatedBy", fields: [createdById], references: [id])
   reviewedById    String?
   reviewedBy      User?    @relation("ReviewedBy", fields: [reviewedById], references: [id])
+  // 개발 담당자 (dev 지정) — dev_staff는 본인 담당 견적만 조회
+  devAssigneeId   String?
+  devAssignee     User?    @relation("DevAssignee", fields: [devAssigneeId], references: [id])
 
   items           QuoteItem[]
   comments        QuoteComment[]
@@ -114,6 +118,7 @@ model Quote {
 
   @@index([status])
   @@index([createdById])
+  @@index([devAssigneeId])
   @@index([createdAt])
 }
 
@@ -146,10 +151,17 @@ model QuoteComment {
   userId    String
   user      User     @relation(fields: [userId], references: [id])
   content   String
+  // 채널: quote = 견적 협의(dev·sales만, 금액 가능) / dev = 개발(dev_staff 포함 전원, 금액 금지)
+  visibility String  @default("quote")
+  // 대댓글: 부모 채널을 그대로 따른다 (서버에서 강제)
+  parentId  String?
+  parent    QuoteComment?  @relation("CommentReplies", fields: [parentId], references: [id], onDelete: Cascade)
+  replies   QuoteComment[] @relation("CommentReplies")
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@index([quoteId])
+  @@index([parentId])
   @@index([createdAt])
 }
 
