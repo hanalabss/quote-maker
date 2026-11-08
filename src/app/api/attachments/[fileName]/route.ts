@@ -3,6 +3,7 @@ import path from "path";
 import { supabase, STORAGE_BUCKET } from "@/lib/supabase";
 import { prisma } from "@/lib/db";
 import { getAuthUser } from "@/lib/auth";
+import { canAccessQuote } from "@/lib/quoteAccess";
 
 export async function GET(
   _request: NextRequest,
@@ -18,12 +19,12 @@ export async function GET(
   // 경로 탈출 방지
   const safeName = path.basename(fileName);
 
-  // 외주 견적의 첨부파일은 dev만 접근 가능
+  // 첨부는 견적 접근 권한을 따른다 (외주 = dev만, dev_staff = 담당 견적만)
   const owner = await prisma.quote.findFirst({
     where: { attachments: { array_contains: [{ fileName: safeName }] } },
-    select: { isExternal: true },
+    select: { isExternal: true, createdById: true, devAssigneeId: true },
   });
-  if (owner?.isExternal && user.role !== "dev") {
+  if (owner && (owner.isExternal || user.role === "dev_staff") && !canAccessQuote(user, owner)) {
     return NextResponse.json({ error: "권한이 없습니다" }, { status: 403 });
   }
 

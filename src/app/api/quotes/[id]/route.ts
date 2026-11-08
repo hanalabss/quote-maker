@@ -5,6 +5,7 @@ import {
   sendApprovalNotification,
   sendConfirmationNotification,
   sendRevisionRequestNotification,
+  sendAssignmentNotification,
 } from "@/lib/email";
 import { applyPriceRate, formatKRW } from "@/lib/pricing";
 import { TYPE_PRICE_RATE } from "@/types";
@@ -13,6 +14,7 @@ import { buildBaselineMap, normalizeItemName } from "@/lib/baseline";
 import { redactQuotePrices } from "@/lib/priceVisibility";
 import { buildRequestItems, SCREEN_FLOWS } from "@/lib/requestItems";
 import { isValidCalendarColor } from "@/lib/calendar";
+import { canAccessQuote, commentsInclude } from "@/lib/quoteAccess";
 
 // 승인 가드레일: 단가·납기 자동 검증. 경고 목록 반환 (soft gate — overrideReason으로 강행 가능)
 async function collectApprovalWarnings(quote: {
@@ -87,10 +89,8 @@ export async function GET(
       items: { orderBy: { sortOrder: "asc" } },
       createdBy: { select: { name: true, team: true, email: true, role: true } },
       reviewedBy: { select: { name: true } },
-      comments: {
-        orderBy: { createdAt: "asc" },
-        include: { user: { select: { name: true, role: true, team: true } } },
-      },
+      devAssignee: { select: { id: true, name: true, role: true } },
+      comments: commentsInclude(user.role),
     },
   });
 
@@ -98,13 +98,8 @@ export async function GET(
     return NextResponse.json({ error: "견적을 찾을 수 없습니다" }, { status: 404 });
   }
 
-  // sales는 자기 견적만 조회 가능
-  if (user.role === "sales" && quote.createdById !== user.id) {
-    return NextResponse.json({ error: "권한이 없습니다" }, { status: 403 });
-  }
-
-  // 외주 프로젝트는 dev만 조회 가능
-  if (quote.isExternal && user.role !== "dev") {
+  // sales = 본인 견적, dev_staff = 담당 견적, 외주 = dev만
+  if (!canAccessQuote(user, quote)) {
     return NextResponse.json({ error: "권한이 없습니다" }, { status: 403 });
   }
 
@@ -133,6 +128,63 @@ export async function PATCH(
   // 외주 프로젝트는 dev만 수정 가능
   if (quote.isExternal && user.role !== "dev") {
     return NextResponse.json({ error: "권한이 없습니다" }, { status: 403 });
+  }
+  // dev_staff는 담당 견적만 (그 외 role 가드는 각 분기에서)
+  if (user.role === "dev_staff" && !canAccessQuote(user, quote)) {
+    return NextResponse.json({ error: "권한이 없습니다" }, { status: 403 });
+  }
+
+  // 개발 담당자 지정 — dev만. null이면 해제. 지정/변경은 개발 채널 이력 댓글로 남긴다
+  if ("devAssigneeId" in body) {
+    if (user.role !== "dev") {
+      return NextResponse.json({ error: "권한이 없습니다" }, { status: 403 });
+    }
+    const nextId = body.devAssigneeId === null || body.devAssigneeId === "" ? null : String(body.devAssigneeId);
+    if (nextId === quote.devAssigneeId) {
+      return NextResponse.json({ error: "바뀐 내용이 없습니다" }, { status: 400 });
+    }
+    const assignee = nextId
+      ? await prisma.user.findUnique({ where: { id: nextId }, select: { id: true, name: true, email: true, role: true } })
+      : null;
+    if (nextId && (!assignee || (assignee.role !== "dev" && assignee.role !== "dev_staff"))) {
+      return NextResponse.json({ error: "개발팀 사용자만 담당자로 지정할 수 있습니다" }, { status: 400 });
+    }
+    const prev = quote.devAssigneeId
+      ? await prisma.user.findUnique({ where: { id: quote.devAssigneeId }, select: { name: true } })
+      : null;
+    await prisma.$transaction(async (tx) => {
+      await tx.quote.update({ where: { id }, data: { devAssigneeId: nextId } });
+      await tx.quoteComment.create({
+        data: {
+          quoteId: id,
+          userId: user.id,
+          visibility: "dev",
+          content: `[개발 담당] ${prev?.name ?? "없음"} → ${assignee?.name ?? "없음"}`,
+        },
+      });
+    });
+    if (assignee && assignee.id !== user.id) {
+      await sendAssignmentNotification({
+        to: assignee.email,
+        assigneeName: assignee.name,
+        quoteNumber: quote.quoteNumber,
+        eventName: quote.eventName,
+        eventDate: quote.confirmedDate || quote.eventDate,
+        devDeadline: quote.devDeadline,
+        quoteUrl: `${process.env.NEXT_PUBLIC_APP_URL}/dashboard/quotes/${id}`,
+      }).catch((err) => console.error("[Email] 담당자 지정 알림 실패:", err));
+    }
+    const updated = await prisma.quote.findUnique({
+      where: { id },
+      include: {
+        items: { orderBy: { sortOrder: "asc" } },
+        createdBy: { select: { name: true, team: true, email: true, role: true } },
+        reviewedBy: { select: { name: true } },
+        devAssignee: { select: { id: true, name: true, role: true } },
+        comments: commentsInclude(user.role),
+      },
+    });
+    return NextResponse.json(redactQuotePrices(updated, user.role));
   }
 
   // 상태 변경
@@ -498,10 +550,8 @@ export async function PATCH(
         items: { orderBy: { sortOrder: "asc" } },
         createdBy: { select: { name: true, team: true, email: true, role: true } },
         reviewedBy: { select: { name: true } },
-        comments: {
-          orderBy: { createdAt: "asc" },
-          include: { user: { select: { name: true, role: true, team: true } } },
-        },
+        devAssignee: { select: { id: true, name: true, role: true } },
+        comments: commentsInclude(user.role),
       },
     });
     return NextResponse.json(redactQuotePrices(updated, user.role));
@@ -610,7 +660,7 @@ export async function PATCH(
       await tx.quote.update({ where: { id }, data: changed });
       if (logHistory) {
         await tx.quoteComment.create({
-          data: { quoteId: id, userId: user.id, content: ["[정보 수정]", ...lines].join("\n") },
+          data: { quoteId: id, userId: user.id, visibility: "dev", content: ["[정보 수정]", ...lines].join("\n") },
         });
       }
     });
@@ -621,10 +671,8 @@ export async function PATCH(
         items: { orderBy: { sortOrder: "asc" } },
         createdBy: { select: { name: true, team: true, email: true, role: true } },
         reviewedBy: { select: { name: true } },
-        comments: {
-          orderBy: { createdAt: "asc" },
-          include: { user: { select: { name: true, role: true, team: true } } },
-        },
+        devAssignee: { select: { id: true, name: true, role: true } },
+        comments: commentsInclude(user.role),
       },
     });
     return NextResponse.json(redactQuotePrices(updated, user.role));
@@ -673,6 +721,7 @@ export async function PATCH(
         data: {
           quoteId: id,
           userId: user.id,
+          visibility: "dev",
           content: ["[첨부 추가]", ...toAdd.map((a) => `- ${a.originalName}`)].join("\n"),
         },
       });
@@ -683,10 +732,8 @@ export async function PATCH(
         items: { orderBy: { sortOrder: "asc" } },
         createdBy: { select: { name: true, team: true, email: true, role: true } },
         reviewedBy: { select: { name: true } },
-        comments: {
-          orderBy: { createdAt: "asc" },
-          include: { user: { select: { name: true, role: true, team: true } } },
-        },
+        devAssignee: { select: { id: true, name: true, role: true } },
+        comments: commentsInclude(user.role),
       },
     });
     return NextResponse.json(redactQuotePrices(updated, user.role));

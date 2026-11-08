@@ -2,6 +2,7 @@ import { prisma } from "@/lib/db";
 import { getAuthUser } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import { CalendarClient } from "./CalendarClient";
+import { quoteScopeWhere } from "@/lib/quoteAccess";
 import type { CalendarEvent } from "@/lib/calendar";
 
 export default async function CalendarPage() {
@@ -9,18 +10,12 @@ export default async function CalendarPage() {
   if (!user) redirect("/login");
 
   const where: Record<string, unknown> = {
+    ...quoteScopeWhere(user),
     // 확정 + 완료(지난 행사도 달력에 남김)
     status: { in: ["confirmed", "completed"] },
     type: { not: "sale" }, // 판매 유형 제외 (행사 아님)
   };
-  // 외주는 dev만 (dev 달력에는 행사형 외주가 있으면 표시)
-  if (user.role !== "dev") {
-    where.isExternal = false;
-  }
-
-  if (user.role === "sales") {
-    where.createdById = user.id;
-  }
+  // sales = 본인, dev_staff = 담당, 외주는 dev만 (dev 달력에는 행사형 외주가 있으면 표시)
 
   const quotes = await prisma.quote.findMany({
     where,

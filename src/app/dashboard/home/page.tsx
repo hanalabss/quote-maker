@@ -2,6 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/db";
 import { getAuthUser } from "@/lib/auth";
+import { commentWhere, quoteScopeWhere } from "@/lib/quoteAccess";
 import { kstToday } from "@/lib/lifecycle";
 import { getNextAction, isMyTurn, actionPriority, ACTOR_LABELS, type NextAction } from "@/lib/nextAction";
 import { STATUS_LABELS, STATUS_COLORS, type QuoteStatus } from "@/types";
@@ -71,12 +72,8 @@ export default async function HomePage() {
   const user = await getAuthUser();
   if (!user) redirect("/login");
 
-  const where: Record<string, unknown> = { status: { notIn: ["lost"] } };
-  if (user.role !== "dev") where.isExternal = false;
-  if (user.role === "sales") {
-    where.createdById = user.id;
-    where.isHidden = false;
-  }
+  const where: Record<string, unknown> = { ...quoteScopeWhere(user), status: { notIn: ["lost"] } };
+  if (user.role === "sales") where.isHidden = false;
 
   const quotes = await prisma.quote.findMany({
     where,
@@ -95,7 +92,7 @@ export default async function HomePage() {
       balancePaidAt: true,
       isExternal: true,
       createdBy: { select: { name: true, role: true } },
-      comments: { orderBy: { createdAt: "desc" }, take: 1, select: { user: { select: { role: true } } } },
+      comments: { where: commentWhere(user.role), orderBy: { createdAt: "desc" }, take: 1, select: { user: { select: { role: true } } } },
     },
     orderBy: { createdAt: "desc" },
   });

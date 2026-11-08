@@ -39,6 +39,7 @@ import { normalizeItemName, type BaselineMap } from "@/lib/baseline";
 import { getLifecycleBadge, todayStr } from "@/lib/lifecycle";
 import { RequestEditModal } from "@/components/RequestEditModal";
 import { CalendarColorPicker } from "@/components/quote/CalendarColorPicker";
+import { QuoteComments, type QuoteCommentType } from "@/components/quote/QuoteComments";
 
 interface QuoteItem {
   id: string;
@@ -96,16 +97,9 @@ interface QuoteDetail {
   createdAt: string;
   createdBy?: { name: string; team: string; email: string; role?: string } | null;
   reviewedBy?: { name: string } | null;
+  devAssigneeId: string | null;
+  devAssignee?: { id: string; name: string; role: string } | null;
   comments?: QuoteCommentType[];
-}
-
-interface QuoteCommentType {
-  id: string;
-  userId: string;
-  content: string;
-  createdAt: string;
-  updatedAt: string;
-  user: { name: string; role: string; team: string | null };
 }
 
 // 견적 생애주기 파이프라인 (반려/미진행은 이탈 상태로 별도 배너 표시)
@@ -366,10 +360,8 @@ export default function QuoteDetailPage({
   const [devDeadline, setDevDeadline] = useState("");
   const [lostReason, setLostReason] = useState("");
   const [comments, setComments] = useState<QuoteCommentType[]>([]);
-  const [newComment, setNewComment] = useState("");
-  const [commentSaving, setCommentSaving] = useState(false);
-  const [editingCommentId, setEditingCommentId] = useState<string | null>(null);
-  const [editingCommentContent, setEditingCommentContent] = useState("");
+  // 개발 담당자 지정 (dev 전용)
+  const [devTeam, setDevTeam] = useState<{ id: string; name: string; role: string }[]>([]);
   // 수정 요청 (사업팀, approved → reviewing)
   const [showRevisionModal, setShowRevisionModal] = useState(false);
   const [revisionReasonInput, setRevisionReasonInput] = useState("");
@@ -446,58 +438,30 @@ export default function QuoteDetailPage({
 
 
 
-  async function deleteComment(commentId: string) {
-    if (!confirm("댓글을 삭제하시겠습니까?")) return;
-    try {
-      const res = await fetch(`/api/quotes/${id}/comments/${commentId}`, { method: "DELETE" });
-      if (res.ok) {
-        setComments((prev) => prev.filter((c) => c.id !== commentId));
-      }
-    } catch (e) {
-      console.error("댓글 삭제 오류:", e);
-    }
+  useEffect(() => {
+    if (!isDev) return;
+    fetch("/api/users/dev-team")
+      .then((r) => (r.ok ? r.json() : []))
+      .then(setDevTeam)
+      .catch(() => {});
+  }, [isDev]);
+
+  // 개발 담당자 지정 — 지정 시 담당자에게 메일, 개발 채널에 이력 댓글
+  async function updateDevAssignee(assigneeId: string | null) {
+    setSaving(true);
+    const res = await fetch(`/api/quotes/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ devAssigneeId: assigneeId }),
+    });
+    const data = await res.json();
+    if (res.ok) {
+      setQuote(data);
+      if (data.comments) setComments(data.comments);
+    } else alert(data.error || "담당자 지정에 실패했습니다");
+    setSaving(false);
   }
 
-  async function updateComment() {
-    if (!editingCommentId || !editingCommentContent.trim()) return;
-    setCommentSaving(true);
-    try {
-      const res = await fetch(`/api/quotes/${id}/comments/${editingCommentId}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ content: editingCommentContent }),
-      });
-      if (res.ok) {
-        const updated = await res.json();
-        setComments((prev) => prev.map((c) => (c.id === updated.id ? updated : c)));
-        setEditingCommentId(null);
-        setEditingCommentContent("");
-      }
-    } catch (e) {
-      console.error("댓글 수정 오류:", e);
-    }
-    setCommentSaving(false);
-  }
-
-  async function addComment() {
-    if (!newComment.trim()) return;
-    setCommentSaving(true);
-    try {
-      const res = await fetch(`/api/quotes/${id}/comments`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ content: newComment }),
-      });
-      if (res.ok) {
-        const comment = await res.json();
-        setComments((prev) => [...prev, comment]);
-        setNewComment("");
-      }
-    } catch (e) {
-      console.error("댓글 등록 오류:", e);
-    }
-    setCommentSaving(false);
-  }
 
   async function updateStatus(status: string, extra?: Record<string, string>) {
     setSaving(true);
@@ -1356,6 +1320,29 @@ export default function QuoteDetailPage({
                     <dd className="text-gray-600">{quote.devDeadline}</dd>
                   </div>
                 )}
+                <div className="flex justify-between items-center gap-3">
+                  <dt className={`shrink-0 ${quote.status === "completed" ? "text-slate-600" : "text-emerald-600"}`}>개발 담당</dt>
+                  <dd className="min-w-0">
+                    {isDev ? (
+                      <select
+                        aria-label="개발 담당자"
+                        value={quote.devAssigneeId ?? ""}
+                        disabled={saving}
+                        onChange={(e) => updateDevAssignee(e.target.value || null)}
+                        className="max-w-full min-h-9 px-2 py-1 border rounded-lg text-base sm:text-sm bg-white focus:ring-2 focus:ring-blue-500 outline-none"
+                      >
+                        <option value="">미지정</option>
+                        {devTeam.map((u) => (
+                          <option key={u.id} value={u.id}>
+                            {u.name}{u.role === "dev" ? " (관리자)" : ""}
+                          </option>
+                        ))}
+                      </select>
+                    ) : (
+                      <span className={quote.devAssignee ? "font-medium" : "text-gray-400"}>{quote.devAssignee?.name ?? "미지정"}</span>
+                    )}
+                  </dd>
+                </div>
                 {quote.confirmedAt && (
                   <div className="flex justify-between">
                     <dt className={quote.status === "completed" ? "text-slate-600" : "text-emerald-600"}>확정일</dt>
@@ -1472,119 +1459,15 @@ export default function QuoteDetailPage({
             </div>
           )}
 
-          {/* 댓글 섹션 */}
-          <div className="bg-white rounded-xl border p-5">
-            <h3 className="font-medium mb-4 flex items-center gap-1.5">
-              <MessageCircle className="w-4 h-4" />
-              댓글 ({comments.length})
-            </h3>
-
-            {comments.length > 0 ? (
-              <div className="space-y-3 mb-4">
-                {comments.map((c) => (
-                  <div key={c.id} className={`p-3 rounded-lg ${c.user.role === "dev" ? "bg-blue-50 border border-blue-100" : "bg-gray-50 border border-gray-100"}`}>
-                    <div className="flex items-center gap-2 mb-1">
-                      <span className="text-sm font-medium">{c.user.name}</span>
-                      <span className={`text-xs px-1.5 py-0.5 rounded ${c.user.role === "dev" ? "bg-blue-100 text-blue-700" : "bg-gray-200 text-gray-600"}`}>
-                        {c.user.role === "dev" ? "개발팀" : "사업팀"}
-                      </span>
-                      <span className="text-xs text-gray-400">
-                        {new Date(c.createdAt).toLocaleString("ko-KR", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
-                        {new Date(c.updatedAt).getTime() - new Date(c.createdAt).getTime() > 2000 && " (수정됨)"}
-                      </span>
-                      {c.userId === user?.id && editingCommentId !== c.id && (
-                        <button
-                          onClick={() => {
-                            setEditingCommentId(c.id);
-                            setEditingCommentContent(c.content);
-                          }}
-                          className="ml-auto text-gray-300 hover:text-blue-500 transition-colors"
-                          title="수정"
-                        >
-                          <Edit3 className="w-3.5 h-3.5" />
-                        </button>
-                      )}
-                      {(isDev || c.userId === user?.id) && (
-                        <button
-                          onClick={() => deleteComment(c.id)}
-                          className={`${c.userId === user?.id && editingCommentId !== c.id ? "" : "ml-auto "}text-gray-300 hover:text-red-500 transition-colors`}
-                          title="삭제"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      )}
-                    </div>
-                    {editingCommentId === c.id ? (
-                      <div>
-                        <textarea
-                          value={editingCommentContent}
-                          onChange={(e) => setEditingCommentContent(e.target.value)}
-                          rows={3}
-                          autoFocus
-                          className="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none resize-none bg-white"
-                          onKeyDown={(e) => {
-                            if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
-                              e.preventDefault();
-                              updateComment();
-                            }
-                            if (e.key === "Escape") {
-                              setEditingCommentId(null);
-                              setEditingCommentContent("");
-                            }
-                          }}
-                        />
-                        <div className="flex justify-end gap-2 mt-1">
-                          <button
-                            onClick={() => {
-                              setEditingCommentId(null);
-                              setEditingCommentContent("");
-                            }}
-                            className="px-2.5 py-1 text-xs text-gray-500 border rounded-lg hover:bg-gray-100 transition-colors"
-                          >
-                            취소
-                          </button>
-                          <button
-                            onClick={updateComment}
-                            disabled={!editingCommentContent.trim() || commentSaving}
-                            className="px-2.5 py-1 text-xs bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors"
-                          >
-                            {commentSaving ? "저장 중..." : "저장"}
-                          </button>
-                        </div>
-                      </div>
-                    ) : (
-                      <p className="text-sm text-gray-700 whitespace-pre-wrap break-words">{c.content}</p>
-                    )}
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <p className="text-sm text-gray-400 mb-4">아직 댓글이 없습니다</p>
-            )}
-
-            <div className="flex gap-2">
-              <textarea
-                value={newComment}
-                onChange={(e) => setNewComment(e.target.value)}
-                placeholder="댓글을 입력하세요..."
-                rows={2}
-                className="flex-1 px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none resize-none"
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
-                    e.preventDefault();
-                    addComment();
-                  }
-                }}
-              />
-              <button
-                onClick={addComment}
-                disabled={!newComment.trim() || commentSaving}
-                className="self-end px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors"
-              >
-                {commentSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
-              </button>
-            </div>
-          </div>
+          {/* 댓글 섹션 — 견적 협의(관리자·사업팀) / 개발(개발 담당 포함) 채널 */}
+          <QuoteComments
+            quoteId={id}
+            comments={comments}
+            setComments={setComments}
+            userId={user?.id}
+            role={user?.role}
+            defaultChannel={isConfirmedStage ? "dev" : "quote"}
+          />
 
           {/* 삭제 버튼 - dev: 완전삭제, 요청자: 숨김 */}
           {(isDev || quote.createdById === user?.id) && (

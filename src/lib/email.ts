@@ -152,41 +152,84 @@ export async function sendApprovalNotification(data: ApprovalNotificationData) {
   }
 }
 
-// 댓글 등록 시 → 상대 팀에게 (dev 작성 → 요청자 / 그 외 작성 → 개발팀)
+// 댓글 등록 시 → 상대 쪽에게
+//   견적 협의(quote): dev 작성 → 요청자 / sales 작성 → dev. dev_staff는 절대 받지 않음
+//   개발(dev): 위 규칙 + 개발 담당자. dev_staff 작성 → 요청자 + dev
 export async function sendCommentNotification(data: {
   quoteNumber: string;
   eventName: string;
   quoteUrl: string;
   authorName: string;
   authorRole: string;
+  authorEmail?: string | null;
   content: string;
+  channel: "quote" | "dev";
   requesterEmail?: string | null;
   createdByEmail?: string | null;
+  assigneeEmail?: string | null;
 }) {
+  const salesSide = [data.requesterEmail, data.createdByEmail].filter((e): e is string => !!e);
   let recipients: string[];
-  if (data.authorRole === "dev" || data.authorRole === "dev_staff") {
-    recipients = [...new Set([data.requesterEmail, data.createdByEmail].filter((e): e is string => !!e))];
+  if (data.authorRole === "dev") {
+    recipients = [...salesSide];
+  } else if (data.authorRole === "dev_staff") {
+    recipients = [...salesSide, ...(await getDevEmails(["dev"]))];
   } else {
     recipients = await getDevEmails(["dev"]);
+  }
+  if (data.channel === "dev" && data.assigneeEmail) recipients.push(data.assigneeEmail);
+  recipients = [...new Set(recipients)].filter((e) => e !== data.authorEmail);
+  if (data.channel === "quote") {
+    // 방어: 견적 협의 채널은 dev_staff 메일로 절대 나가지 않게 한 번 더 거른다
+    const staff = new Set(await getDevEmails(["dev_staff"]));
+    recipients = recipients.filter((e) => !staff.has(e));
   }
   if (recipients.length === 0) {
     console.log("[Email] 댓글 알림 수신자 없음 - 건너뜀:", data.quoteNumber);
     return null;
   }
 
+  const roleLabel = data.authorRole === "dev" ? "개발팀" : data.authorRole === "dev_staff" ? "개발 담당" : "사업팀";
+  const channelLabel = data.channel === "dev" ? "개발" : "견적 협의";
   return sendEmail(
     recipients.join(","),
-    `[댓글] ${data.eventName} - ${data.authorName}`,
+    `[댓글·${channelLabel}] ${data.eventName} - ${data.authorName}`,
     emailLayout("견적에 새 댓글이 달렸습니다", `
       ${infoTable([
         { label: "견적번호", value: data.quoteNumber },
         { label: "행사명", value: data.eventName },
-        { label: "작성자", value: `${data.authorName} (${data.authorRole === "dev" ? "개발팀" : "사업팀"})` },
+        { label: "채널", value: channelLabel },
+        { label: "작성자", value: `${data.authorName} (${roleLabel})` },
       ])}
       <div style="margin: 16px 0; padding: 12px 16px; background: #f8fafc; border-left: 3px solid #3b82f6; border-radius: 4px;">
         <div style="font-size: 14px; color: #374151; white-space: pre-wrap;">${data.content}</div>
       </div>
       ${actionButton(data.quoteUrl, "댓글 확인하기")}
+    `)
+  );
+}
+
+// 개발 담당자 지정 시 → 담당자에게 (금액 없음)
+export async function sendAssignmentNotification(data: {
+  to: string;
+  assigneeName: string;
+  quoteNumber: string;
+  eventName: string;
+  eventDate?: string | null;
+  devDeadline?: string | null;
+  quoteUrl: string;
+}) {
+  return sendEmail(
+    data.to,
+    `[개발 담당] ${data.eventName} - ${data.assigneeName}`,
+    emailLayout("개발 담당자로 지정되었습니다", `
+      ${infoTable([
+        { label: "견적번호", value: data.quoteNumber },
+        { label: "행사명", value: data.eventName },
+        { label: "행사일", value: data.eventDate || "-" },
+        { label: "개발 마감일", value: data.devDeadline ? `<strong style="color: #dc2626;">${data.devDeadline}</strong>` : "-" },
+      ])}
+      ${actionButton(data.quoteUrl, "견적 상세보기")}
     `)
   );
 }
