@@ -1,3 +1,4 @@
+import { pickCommentRecipients } from "@/lib/quoteAccess";
 interface QuoteNotificationData {
   quoteNumber: string;
   eventName: string;
@@ -153,8 +154,10 @@ export async function sendApprovalNotification(data: ApprovalNotificationData) {
 }
 
 // 댓글 등록 시 → 상대 쪽에게
-//   견적 협의(quote): dev 작성 → 요청자 / sales 작성 → dev. dev_staff는 절대 받지 않음
-//   개발(dev): 위 규칙 + 개발 담당자. dev_staff 작성 → 요청자 + dev
+//   견적 협의(quote): dev 작성 → 사업팀 / sales 작성 → 관리자(dev). dev_staff는 절대 받지 않음
+//   개발(dev): 담당자가 정해지면 사업팀 ↔ 담당자 1:1 매칭 (다른 개발자에게 문의가 흩어지지 않게)
+//     sales 작성 → 담당자만 (담당 미지정이면 관리자)
+//     담당자·관리자 작성 → 사업팀 (+ 관리자가 썼으면 담당자도)
 export async function sendCommentNotification(data: {
   quoteNumber: string;
   eventName: string;
@@ -168,17 +171,14 @@ export async function sendCommentNotification(data: {
   createdByEmail?: string | null;
   assigneeEmail?: string | null;
 }) {
-  const salesSide = [data.requesterEmail, data.createdByEmail].filter((e): e is string => !!e);
-  let recipients: string[];
-  if (data.authorRole === "dev") {
-    recipients = [...salesSide];
-  } else if (data.authorRole === "dev_staff") {
-    recipients = [...salesSide, ...(await getDevEmails(["dev"]))];
-  } else {
-    recipients = await getDevEmails(["dev"]);
-  }
-  if (data.channel === "dev" && data.assigneeEmail) recipients.push(data.assigneeEmail);
-  recipients = [...new Set(recipients)].filter((e) => e !== data.authorEmail);
+  let recipients = pickCommentRecipients({
+    channel: data.channel,
+    authorRole: data.authorRole,
+    authorEmail: data.authorEmail,
+    salesEmails: [data.requesterEmail, data.createdByEmail].filter((e): e is string => !!e),
+    assigneeEmail: data.assigneeEmail,
+    adminEmails: await getDevEmails(["dev"]),
+  });
   if (data.channel === "quote") {
     // 방어: 견적 협의 채널은 dev_staff 메일로 절대 나가지 않게 한 번 더 거른다
     const staff = new Set(await getDevEmails(["dev_staff"]));
@@ -209,27 +209,45 @@ export async function sendCommentNotification(data: {
   );
 }
 
-// 개발 담당자 지정 시 → 담당자에게 (금액 없음)
+// 개발 담당자 지정 시 → 담당자 + 사업팀(요청자)에게 (금액 없음)
+// 사업팀에게는 "개발 문의는 이 사람에게" 매칭을 알린다
 export async function sendAssignmentNotification(data: {
-  to: string;
+  to: string | null;
   assigneeName: string;
   quoteNumber: string;
   eventName: string;
   eventDate?: string | null;
   devDeadline?: string | null;
   quoteUrl: string;
+  salesEmails?: string[];
 }) {
-  return sendEmail(
+  const rows = [
+    { label: "견적번호", value: data.quoteNumber },
+    { label: "행사명", value: data.eventName },
+    { label: "행사일", value: data.eventDate || "-" },
+    { label: "개발 마감일", value: data.devDeadline ? `<strong style="color: #dc2626;">${data.devDeadline}</strong>` : "-" },
+  ];
+  if (data.to) await sendEmail(
     data.to,
     `[개발 담당] ${data.eventName} - ${data.assigneeName}`,
     emailLayout("개발 담당자로 지정되었습니다", `
-      ${infoTable([
-        { label: "견적번호", value: data.quoteNumber },
-        { label: "행사명", value: data.eventName },
-        { label: "행사일", value: data.eventDate || "-" },
-        { label: "개발 마감일", value: data.devDeadline ? `<strong style="color: #dc2626;">${data.devDeadline}</strong>` : "-" },
-      ])}
+      ${infoTable(rows)}
+      <p style="font-size: 14px; color: #374151;">사업팀의 개발 문의는 견적 상세의 <strong>개발</strong> 댓글로 담당자에게 바로 전달됩니다.</p>
       ${actionButton(data.quoteUrl, "견적 상세보기")}
+    `)
+  );
+  const sales = [...new Set(data.salesEmails ?? [])].filter((e) => e && e !== data.to);
+  if (sales.length === 0) return null;
+  return sendEmail(
+    sales.join(","),
+    `[개발 담당 안내] ${data.eventName} - ${data.assigneeName}`,
+    emailLayout(`개발 담당: ${data.assigneeName}`, `
+      ${infoTable([{ label: "개발 담당", value: `<strong>${data.assigneeName}</strong>`, highlight: true }, ...rows])}
+      <p style="font-size: 14px; color: #374151;">
+        이 행사의 개발 관련 문의(시안·일정·장비 등)는 견적 상세 화면의 <strong>개발</strong> 댓글에 남겨주세요.
+        ${data.assigneeName}님에게 바로 전달됩니다. 금액 문의는 <strong>견적 협의</strong> 댓글로 남겨주세요.
+      </p>
+      ${actionButton(data.quoteUrl, "개발 댓글 남기기")}
     `)
   );
 }

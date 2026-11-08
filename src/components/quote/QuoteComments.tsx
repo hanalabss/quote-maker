@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { MessageCircle, Edit3, Trash2, Send, Loader2, CornerDownRight, Lock, ArrowRightLeft } from "lucide-react";
+import { MessageCircle, Edit3, Trash2, Send, Loader2, CornerDownRight, Lock, ArrowRightLeft, UserCheck } from "lucide-react";
 import { looksLikePrice, visibleChannels, type CommentChannel } from "@/lib/quoteAccess";
 
 export interface QuoteCommentType {
@@ -15,14 +15,15 @@ export interface QuoteCommentType {
   user: { name: string; role: string; team: string | null };
 }
 
-const CHANNEL_META: Record<CommentChannel, { label: string; hint: string }> = {
-  quote: { label: "견적 협의", hint: "관리자·사업팀만 봅니다. 금액 이야기는 여기서." },
-  dev: { label: "개발", hint: "개발 담당자도 봅니다. 금액은 적지 마세요." },
+const CHANNEL_META: Record<CommentChannel, { label: string }> = {
+  quote: { label: "견적 협의" },
+  dev: { label: "개발" },
 };
 
-function roleBadge(role: string) {
-  if (role === "dev") return { text: "개발팀", cls: "bg-blue-100 text-blue-700", box: "bg-blue-50 border-blue-100" };
-  if (role === "dev_staff") return { text: "개발 담당", cls: "bg-indigo-100 text-indigo-700", box: "bg-indigo-50 border-indigo-100" };
+function roleBadge(role: string, isAssignee: boolean) {
+  if (isAssignee) return { text: "개발 담당", cls: "bg-emerald-100 text-emerald-700", box: "bg-emerald-50/60 border-emerald-100" };
+  if (role === "dev") return { text: "관리자", cls: "bg-blue-100 text-blue-700", box: "bg-blue-50 border-blue-100" };
+  if (role === "dev_staff") return { text: "개발팀", cls: "bg-indigo-100 text-indigo-700", box: "bg-indigo-50 border-indigo-100" };
   return { text: "사업팀", cls: "bg-gray-200 text-gray-600", box: "bg-gray-50 border-gray-100" };
 }
 
@@ -37,6 +38,7 @@ export function QuoteComments({
   userId,
   role,
   defaultChannel,
+  assignee,
 }: {
   quoteId: string;
   comments: QuoteCommentType[];
@@ -44,6 +46,8 @@ export function QuoteComments({
   userId?: string;
   role?: string;
   defaultChannel: CommentChannel;
+  /** 개발 담당자 — 개발 채널은 사업팀 ↔ 담당자 1:1 */
+  assignee?: { id: string; name: string } | null;
 }) {
   const channels = visibleChannels(role);
   const isDev = role === "dev";
@@ -152,7 +156,7 @@ export function QuoteComments({
   }
 
   function renderComment(c: QuoteCommentType, isReply: boolean) {
-    const b = roleBadge(c.user.role);
+    const b = roleBadge(c.user.role, !!assignee && c.userId === assignee.id);
     const mine = c.userId === userId;
     return (
       <div key={c.id} className={`p-2.5 sm:p-3 rounded-lg border ${b.box}`}>
@@ -279,7 +283,30 @@ export function QuoteComments({
           ))}
         </div>
       )}
-      <p className="text-xs text-gray-400 mb-3">{CHANNEL_META[tab].hint}</p>
+      {tab === "dev" ? (
+        <div
+          className={`flex items-start gap-2 rounded-lg px-3 py-2 mb-3 text-xs sm:text-sm ${
+            assignee ? "bg-emerald-50 text-emerald-800 border border-emerald-100" : "bg-amber-50 text-amber-800 border border-amber-100"
+          }`}
+        >
+          <UserCheck className="w-4 h-4 mt-0.5 shrink-0" aria-hidden="true" />
+          <p>
+            {assignee ? (
+              assignee.id === userId ? (
+                <>이 행사의 개발 담당입니다. 사업팀의 개발 문의가 여기로 옵니다.</>
+              ) : (
+                <>
+                  개발 담당 <strong>{assignee.name}</strong> — 여기 남긴 댓글은 {assignee.name}님에게 전달됩니다. 금액은 적지 마세요.
+                </>
+              )
+            ) : (
+              <>개발 담당자 지정 전입니다. 댓글은 관리자에게 전달됩니다. 금액은 적지 마세요.</>
+            )}
+          </p>
+        </div>
+      ) : (
+        <p className="text-xs text-gray-500 mb-3">금액·견적 문의는 관리자에게 전달됩니다. 개발 담당자는 볼 수 없습니다.</p>
+      )}
 
       {roots.length > 0 ? (
         <div className="space-y-3 mb-4">
@@ -334,7 +361,11 @@ export function QuoteComments({
         <textarea
           value={newComment}
           onChange={(e) => setNewComment(e.target.value)}
-          placeholder={`${CHANNEL_META[tab].label} 채널에 댓글 입력...`}
+          placeholder={
+            tab === "dev" && assignee && assignee.id !== userId
+              ? `${assignee.name}님에게 개발 문의...`
+              : `${CHANNEL_META[tab].label} 채널에 댓글 입력...`
+          }
           rows={2}
           className="flex-1 px-3 py-2 border rounded-lg text-base sm:text-sm focus:ring-2 focus:ring-blue-500 outline-none resize-none"
           onKeyDown={(e) => {

@@ -29,6 +29,7 @@ interface QuoteListItem {
   depositPaidAt?: string | null;
   balancePaidAt?: string | null;
   lastCommentRole?: string | null;
+  devAssigneeName?: string | null;
   createdByRole?: string | null;
 }
 
@@ -442,7 +443,12 @@ export function QuotesClient({
                           {TYPE_LABELS[q.type as QuoteType] || q.type}
                         </span>
                       </td>
-                      <td className="px-4 py-3 text-sm text-gray-600">{q.requesterName}</td>
+                      <td className="px-4 py-3 text-sm text-gray-600">
+                        {q.requesterName}
+                        {q.devAssigneeName && (
+                          <div className="text-xs text-emerald-700 mt-0.5 whitespace-nowrap">담당 {q.devAssigneeName}</div>
+                        )}
+                      </td>
                       {showPrice && (
                         <td className="px-4 py-3 text-sm text-right font-medium tabular-nums whitespace-nowrap">
                           {formatKRW(q.totalAmount)}원
@@ -497,6 +503,7 @@ export function QuotesClient({
                   {q.eventName}
                 </h3>
                 <NextActionLine q={q} today={today} className="mb-1" />
+                {q.devAssigneeName && <p className="text-xs text-emerald-700 mb-0.5">개발 담당 {q.devAssigneeName}</p>}
                 <div className="flex items-baseline justify-between gap-2">
                   <span className="text-xs text-gray-400 truncate">
                     {q.requesterName} · {TYPE_LABELS[q.type as QuoteType] || q.type} ·{" "}

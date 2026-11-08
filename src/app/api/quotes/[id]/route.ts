@@ -163,15 +163,20 @@ export async function PATCH(
         },
       });
     });
-    if (assignee && assignee.id !== user.id) {
+    if (assignee) {
+      const creator = quote.createdById
+        ? await prisma.user.findUnique({ where: { id: quote.createdById }, select: { email: true } })
+        : null;
       await sendAssignmentNotification({
-        to: assignee.email,
+        to: assignee.id !== user.id ? assignee.email : null, // 본인 지정이면 본인 메일 생략, 사업팀 안내는 보냄
         assigneeName: assignee.name,
         quoteNumber: quote.quoteNumber,
         eventName: quote.eventName,
         eventDate: quote.confirmedDate || quote.eventDate,
         devDeadline: quote.devDeadline,
         quoteUrl: `${process.env.NEXT_PUBLIC_APP_URL}/dashboard/quotes/${id}`,
+        // 외주는 외부 요청자에게 보내지 않음
+        salesEmails: quote.isExternal ? [] : [quote.requesterEmail, creator?.email].filter((e): e is string => !!e),
       }).catch((err) => console.error("[Email] 담당자 지정 알림 실패:", err));
     }
     const updated = await prisma.quote.findUnique({
