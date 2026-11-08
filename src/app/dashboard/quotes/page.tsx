@@ -18,6 +18,7 @@ export default async function QuotesPage() {
       items: { orderBy: { sortOrder: "asc" } },
       createdBy: { select: { name: true, team: true, role: true } },
       reviewedBy: { select: { name: true } },
+      devAssignee: { select: { name: true } },
       comments: { where: commentWhere(user.role), orderBy: { createdAt: "desc" }, take: 1, select: { user: { select: { role: true } } } },
     },
     orderBy: { createdAt: "desc" },
@@ -46,6 +47,7 @@ export default async function QuotesPage() {
     depositPaidAt: q.depositPaidAt,
     balancePaidAt: q.balancePaidAt,
     lastCommentRole: q.comments[0]?.user.role ?? null,
+    devAssigneeName: q.devAssignee?.name ?? null,
   }));
 
   return <QuotesClient quotes={serialized} userRole={user.role} showPrice={showPrice} />;

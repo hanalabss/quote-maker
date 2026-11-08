@@ -29,6 +29,7 @@ import {
   PlayCircle,
   MoreHorizontal,
   type LucideIcon,
+  UserCheck,
 } from "lucide-react";
 import { formatKRW } from "@/lib/pricing";
 import { getNextAction, ACTOR_LABELS } from "@/lib/nextAction";
@@ -784,6 +785,18 @@ export default function QuoteDetailPage({
                 </span>
               )}
             </h1>
+            {/* 개발 담당 — 사업팀이 누구에게 물어야 하는지 한눈에 */}
+            {(quote.devAssignee || isConfirmedStage) && (
+              <p className="mt-1 text-xs sm:text-sm flex items-center gap-1">
+                <UserCheck className={`w-3.5 h-3.5 shrink-0 ${quote.devAssignee ? "text-emerald-600" : "text-gray-400"}`} aria-hidden="true" />
+                <span className="text-gray-500">개발 담당</span>
+                {quote.devAssignee ? (
+                  <strong className="text-emerald-700">{quote.devAssignee.name}</strong>
+                ) : (
+                  <span className="text-gray-400">미지정</span>
+                )}
+              </p>
+            )}
           </div>
         </div>
         <div className="flex items-center gap-2 shrink-0">
@@ -1334,7 +1347,7 @@ export default function QuoteDetailPage({
                         <option value="">미지정</option>
                         {devTeam.map((u) => (
                           <option key={u.id} value={u.id}>
-                            {u.name}{u.role === "dev" ? " (관리자)" : ""}
+                            {u.role === "dev" && u.name !== "관리자" ? `${u.name} (관리자)` : u.name}
                           </option>
                         ))}
                       </select>
@@ -1467,6 +1480,7 @@ export default function QuoteDetailPage({
             userId={user?.id}
             role={user?.role}
             defaultChannel={isConfirmedStage ? "dev" : "quote"}
+            assignee={quote.devAssignee ? { id: quote.devAssignee.id, name: quote.devAssignee.name } : null}
           />
 
           {/* 삭제 버튼 - dev: 완전삭제, 요청자: 숨김 */}

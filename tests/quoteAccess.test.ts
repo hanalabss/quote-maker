@@ -5,6 +5,7 @@ import {
   canSeeChannel,
   commentWhere,
   looksLikePrice,
+  pickCommentRecipients,
   quoteScopeWhere,
   visibleChannels,
 } from "../src/lib/quoteAccess";
@@ -58,4 +59,25 @@ test("금액 표현 감지 (인원·수량은 제외)", () => {
   for (const t of ["5,000명 예상", "1만명", "시안 3장 수령", "11/14 잠실", "납기 2주", "카드 1,500매"]) {
     assert.equal(looksLikePrice(t), false, t);
   }
+});
+
+test("댓글 알림: 개발 채널은 사업팀 ↔ 담당자 1:1", () => {
+  const base = { salesEmails: ["sales@x"], adminEmails: ["admin@x"], assigneeEmail: "staff@x" };
+  // 사업팀 질문 → 담당자만 (관리자에게 안 감)
+  assert.deepEqual(pickCommentRecipients({ ...base, channel: "dev", authorRole: "sales", authorEmail: "sales@x" }), ["staff@x"]);
+  // 담당자 답변 → 사업팀
+  assert.deepEqual(pickCommentRecipients({ ...base, channel: "dev", authorRole: "dev_staff", authorEmail: "staff@x" }), ["sales@x"]);
+  // 관리자가 끼어들면 사업팀 + 담당자
+  assert.deepEqual(pickCommentRecipients({ ...base, channel: "dev", authorRole: "dev", authorEmail: "admin@x" }), ["sales@x", "staff@x"]);
+  // 담당 미지정 → 관리자
+  assert.deepEqual(
+    pickCommentRecipients({ ...base, assigneeEmail: null, channel: "dev", authorRole: "sales", authorEmail: "sales@x" }),
+    ["admin@x"]
+  );
+});
+
+test("댓글 알림: 견적 협의는 관리자 ↔ 사업팀, 담당자 제외", () => {
+  const base = { salesEmails: ["sales@x"], adminEmails: ["admin@x"], assigneeEmail: "staff@x" };
+  assert.deepEqual(pickCommentRecipients({ ...base, channel: "quote", authorRole: "sales", authorEmail: "sales@x" }), ["admin@x"]);
+  assert.deepEqual(pickCommentRecipients({ ...base, channel: "quote", authorRole: "dev", authorEmail: "admin@x" }), ["sales@x"]);
 });

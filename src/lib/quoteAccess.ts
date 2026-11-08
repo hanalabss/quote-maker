@@ -58,3 +58,29 @@ export function looksLikePrice(text: string): boolean {
   // 인원·수량(명/개/장/매/건/회)은 제외: "5,000명", "1만명"
   return /\d[\d,.]*\s*(?:만|천)?\s*원|\d[\d,.]*\s*만(?!\s*[명개장매건회])|\d[\d,.]*\s*K\b|\d{1,3}(?:,\d{3})+(?![\d,]|\s*[명개장매건회])/i.test(text);
 }
+
+/**
+ * 댓글 알림 수신자 (순수 함수 — 테스트 대상)
+ *   견적 협의: 사업팀 작성 → 관리자 / 개발팀 작성 → 사업팀
+ *   개발: 담당자가 있으면 사업팀 ↔ 담당자 1:1 매칭
+ *     사업팀 작성 → 담당자만 (없으면 관리자)
+ *     개발팀 작성 → 사업팀 (+ 담당자 본인이 아니면 담당자에게도)
+ */
+export function pickCommentRecipients(p: {
+  channel: CommentChannel;
+  authorRole: string;
+  authorEmail?: string | null;
+  salesEmails: string[];
+  assigneeEmail?: string | null;
+  adminEmails: string[];
+}): string[] {
+  const isDevSide = p.authorRole === "dev" || p.authorRole === "dev_staff";
+  let r: string[];
+  if (p.channel === "dev") {
+    if (isDevSide) r = [...p.salesEmails, ...(p.assigneeEmail ? [p.assigneeEmail] : [])];
+    else r = p.assigneeEmail ? [p.assigneeEmail] : [...p.adminEmails];
+  } else {
+    r = isDevSide ? [...p.salesEmails] : [...p.adminEmails];
+  }
+  return [...new Set(r)].filter((e) => !!e && e !== p.authorEmail);
+}
