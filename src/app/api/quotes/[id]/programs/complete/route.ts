@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { supabase, STORAGE_BUCKET } from "@/lib/supabase";
-import { fail, programContext } from "@/lib/programAccess";
+import { fail, noteMaterialUpload, programContext } from "@/lib/programAccess";
 import {
   SynologyError,
   createShareLink,
@@ -16,6 +16,8 @@ import {
 } from "@/lib/synology";
 import {
   isUploadId,
+  materialUploadOpen,
+  parseUploadDir,
   sanitizeFileName,
   timestampedName,
   tmpDir,
@@ -28,7 +30,8 @@ import {
 export const maxDuration = 300;
 export const dynamic = "force-dynamic";
 
-// 임시 조각을 이어 붙여 연결된 NAS 행사 폴더로 옮기고, 받기 링크를 만들어 기록한다.
+// 임시 조각을 이어 붙여 연결된 NAS 행사 폴더(dir 이 있으면 그 아래 자료 폴더)로 옮기고, 받기 링크를 만들어 기록한다.
+// 권한은 init 과 같다: 완료 프로그램 = 개발팀 / 자료 = 견적을 볼 수 있는 사람.
 // 오래 걸리므로 진행 상황을 한 줄에 JSON 하나씩(NDJSON) 흘려보낸다:
 //   {stage:"nas", sent, total} … {stage:"verify"} {stage:"share"} {done:true, program} | {error}
 export async function POST(
@@ -36,19 +39,24 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> },
 ) {
   const { id } = await params;
-  const ctx = await programContext(id, { manage: true, nas: true });
-  if (ctx instanceof NextResponse) return ctx;
-  const { user, quote } = ctx;
-  if (!quote.programFolder) return fail("먼저 NAS 행사 폴더를 연결해 주세요", 409);
-  const folder = eventFolderPath(quote.programFolder);
-
   const body = (await request.json().catch(() => null)) as {
+    dir?: unknown;
     uploadId?: unknown;
     fileName?: unknown;
     size?: unknown;
     version?: unknown;
     note?: unknown;
   } | null;
+  const dir = parseUploadDir(body?.dir);
+  const ctx = await programContext(id, { manage: dir === "", nas: true });
+  if (ctx instanceof NextResponse) return ctx;
+  const { user, quote } = ctx;
+  if (dir === null) return fail("잘못된 요청입니다", 400);
+  if (dir && !materialUploadOpen(quote.status)) return fail("반려·미진행 견적에는 자료를 올릴 수 없습니다", 400);
+  if (!quote.programFolder) return fail("먼저 NAS 행사 폴더를 연결해 주세요", 409);
+  const eventFolder = eventFolderPath(quote.programFolder);
+  // 자료 폴더는 없으면 올릴 때 NAS가 만든다 (create_parents)
+  const folder = dir ? `${eventFolder}/${dir}` : eventFolder;
   const uploadId = body?.uploadId;
   const rawName = typeof body?.fileName === "string" ? body.fileName : "";
   const size = typeof body?.size === "number" ? body.size : NaN;
@@ -56,20 +64,20 @@ export async function POST(
   const note = typeof body?.note === "string" ? body.note.trim().slice(0, 300) || null : null;
 
   if (!isUploadId(uploadId)) return NextResponse.json({ error: "잘못된 요청입니다" }, { status: 400 });
-  const invalid = validateProgramFile(rawName, size);
+  const invalid = validateProgramFile(rawName, size, dir);
   if (invalid) return NextResponse.json({ error: invalid }, { status: 400 });
   const fileName = sanitizeFileName(rawName);
 
   // 조각 확인 — 브라우저가 보낸 값이 아니라 임시 폴더에 실제로 있는 것을 기준으로 한다
   const bucket = supabase.storage.from(STORAGE_BUCKET);
-  const dir = tmpDir(id, uploadId);
-  const { data: listed, error: listError } = await bucket.list(dir, {
+  const tmp = tmpDir(id, uploadId);
+  const { data: listed, error: listError } = await bucket.list(tmp, {
     limit: 1000,
     sortBy: { column: "name", order: "asc" },
   });
   const partNames = (listed ?? []).map((f) => f.name).sort();
   const removeTmp = async () => {
-    if (partNames.length) await bucket.remove(partNames.map((n) => `${dir}/${n}`)).catch(() => {});
+    if (partNames.length) await bucket.remove(partNames.map((n) => `${tmp}/${n}`)).catch(() => {});
   };
   if (listError || partNames.length === 0) {
     return NextResponse.json({ error: "올린 조각을 찾지 못했습니다. 다시 올려 주세요" }, { status: 400 });
@@ -82,7 +90,7 @@ export async function POST(
 
   async function* chunks(): AsyncGenerator<Uint8Array> {
     for (const name of partNames) {
-      const { data, error } = await bucket.download(`${dir}/${name}`);
+      const { data, error } = await bucket.download(`${tmp}/${name}`);
       if (error || !data) throw new SynologyError("임시 보관한 조각을 읽지 못했습니다");
       yield new Uint8Array(await data.arrayBuffer());
     }
@@ -107,7 +115,7 @@ export async function POST(
         sid = await login();
 
         // 연결된 폴더가 NAS에서 없어졌으면 새로 만들지 않고 멈춘다 (이름이 바뀐 것일 수 있다)
-        if ((await listFolder(sid, folder)) === null) {
+        if ((await listFolder(sid, eventFolder)) === null) {
           throw new SynologyError("NAS에서 행사 폴더를 찾을 수 없습니다. 폴더를 다시 연결해 주세요");
         }
 
@@ -158,6 +166,13 @@ export async function POST(
           },
           select: { id: true, fileName: true, size: true, version: true, note: true, createdAt: true },
         });
+
+        if (dir) {
+          // 상대(사업팀 ↔ 개발팀)가 알 수 있게 개발 채널에 남긴다. 실패해도 올리기는 성공으로 둔다.
+          await noteMaterialUpload(id, user.id, dir, storedName).catch((e) =>
+            console.error("자료 올림 댓글 기록 실패:", e instanceof Error ? e.message : e),
+          );
+        }
 
         send({ done: true, program: { ...program, uploadedBy: { name: user.name } } });
       } catch (e) {

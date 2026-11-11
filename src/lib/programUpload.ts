@@ -17,6 +17,47 @@ export function canUploadProgram(role: string | null | undefined): boolean {
   return role === "dev" || role === "dev_staff";
 }
 
+// 행사 자료 — 행사 폴더 아래 고정 이름의 하위 폴더. 시안·문구 등은 여기에 올린다.
+// 견적을 볼 수 있는 사람(개발팀 + 그 견적을 요청한 사업팀)이 올리고, 지우기는 올린 본인과 개발팀.
+// 행사 폴더 바로 아래(dir = "")는 완료 프로그램(설치 파일) 자리로, 개발팀만 올린다.
+export const MATERIAL_FOLDERS = ["디자인", "기타 자료"] as const;
+export type MaterialFolder = (typeof MATERIAL_FOLDERS)[number];
+export type UploadDir = "" | MaterialFolder;
+
+export const MATERIAL_EXTENSIONS = [
+  // 이미지·시안 원본
+  ".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp", ".tif", ".tiff", ".svg", ".heic",
+  ".ai", ".psd", ".eps", ".indd", ".pdf", ".fig", ".sketch", ".xd",
+  // 문서
+  ".doc", ".docx", ".xls", ".xlsx", ".ppt", ".pptx", ".hwp", ".hwpx", ".txt", ".csv",
+  // 영상·소리·글꼴
+  ".mp4", ".mov", ".avi", ".wmv", ".mp3", ".wav", ".m4a", ".ttf", ".otf",
+  // 묶음
+  ".zip", ".7z", ".rar",
+];
+
+/** 요청에 실려 온 하위 폴더 값. 없거나 빈 값 = 행사 폴더 바로 아래. 목록에 없는 이름은 null. */
+export function parseUploadDir(v: unknown): UploadDir | null {
+  if (v === undefined || v === null || v === "") return "";
+  return (MATERIAL_FOLDERS as readonly string[]).includes(v as string) ? (v as MaterialFolder) : null;
+}
+
+/** 반려·미진행 견적에는 자료를 더 올리지 않는다 */
+export function materialUploadOpen(status: string | null | undefined): boolean {
+  return status !== "rejected" && status !== "lost";
+}
+
+/** 자료를 지울 수 있는 사람: 올린 본인 또는 개발팀 */
+export function canDeleteMaterial(user: { id: string; role: string }, uploadedById: string | null | undefined): boolean {
+  return canUploadProgram(user.role) || (!!uploadedById && uploadedById === user.id);
+}
+
+/** 자동으로 만드는 행사 폴더 이름 후보: 행사명, 이미 있으면 견적번호를 붙인 이름 */
+export function autoFolderNames(eventName: string, quoteNumber: string): [string, string] {
+  const base = sanitizeFolderName(eventName);
+  return [base || quoteNumber, base ? `${base.slice(0, 60).trim()} (${quoteNumber})` : `${quoteNumber} 자료`];
+}
+
 export function partCount(size: number, partSize: number = PROGRAM_PART_SIZE): number {
   return Math.max(1, Math.ceil(size / partSize));
 }
@@ -38,11 +79,15 @@ export function fileExtension(name: string): string {
   return i <= 0 ? "" : name.slice(i).toLowerCase();
 }
 
-/** 올리기 전 검사. 문제가 없으면 null, 있으면 사용자에게 보여 줄 문구. */
-export function validateProgramFile(name: string, size: number): string | null {
+/** 올리기 전 검사. 문제가 없으면 null, 있으면 사용자에게 보여 줄 문구. dir 이 있으면 행사 자료 규칙으로 본다. */
+export function validateProgramFile(name: string, size: number, dir: UploadDir = ""): string | null {
   const safe = sanitizeFileName(name);
   if (!safe) return "파일명이 올바르지 않습니다";
-  if (!PROGRAM_EXTENSIONS.includes(fileExtension(safe))) {
+  if (dir) {
+    if (!MATERIAL_EXTENSIONS.includes(fileExtension(safe))) {
+      return "이 형식은 올릴 수 없습니다. 이미지·시안 원본(ai, psd, pdf)·문서·영상·zip 을 올릴 수 있습니다";
+    }
+  } else if (!PROGRAM_EXTENSIONS.includes(fileExtension(safe))) {
     return `올릴 수 있는 형식: ${PROGRAM_EXTENSIONS.join(", ")}`;
   }
   if (!Number.isInteger(size) || size <= 0) return "빈 파일은 올릴 수 없습니다";

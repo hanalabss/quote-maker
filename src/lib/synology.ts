@@ -9,7 +9,7 @@
 import http from "http";
 import https from "https";
 import { randomBytes } from "crypto";
-import { DEFAULT_NAS_BASE_DIR } from "@/lib/programUpload";
+import { DEFAULT_NAS_BASE_DIR, MATERIAL_FOLDERS } from "@/lib/programUpload";
 
 const API_TIMEOUT_MS = 30_000;
 const UPLOAD_IDLE_TIMEOUT_MS = 120_000;
@@ -155,13 +155,24 @@ export async function logout(sid: string): Promise<void> {
   }
 }
 
-/** 로그인 → 작업 → 로그아웃 */
+/**
+ * 로그인 → 작업 → 로그아웃.
+ * 작업 도중 NAS가 세션을 잃었다고 답하면(106 만료 · 119 세션 없음) 한 번만 새로 로그인해 처음부터 다시 한다.
+ * 2026-11-11 로컬에서 목록 조회 중 119 가 한 번 났다(동시 호출·새로 고침으로는 재현되지 않아 원인 미확정).
+ * 여기에 넘기는 작업은 다시 해도 결과가 같은 것(목록·링크·삭제·폴더 만들기)이어야 한다. 파일 올리기는 이 함수를 쓰지 않는다.
+ */
 export async function withSession<T>(fn: (sid: string) => Promise<T>): Promise<T> {
-  const sid = await login();
-  try {
-    return await fn(sid);
-  } finally {
-    await logout(sid);
+  for (let attempt = 0; ; attempt++) {
+    const sid = await login();
+    try {
+      return await fn(sid);
+    } catch (e) {
+      const sessionLost = e instanceof SynologyError && (e.code === 106 || e.code === 119);
+      if (!sessionLost || attempt > 0) throw e;
+      console.error(`NAS 세션이 끊겨 다시 로그인합니다 (코드 ${e.code})`);
+    } finally {
+      await logout(sid);
+    }
   }
 }
 
@@ -383,8 +394,12 @@ export async function deleteShareLink(sid: string, id: string): Promise<void> {
 /** 파일 하나를 지운다 (NAS 휴지통이 켜져 있으면 #recycle 로 간다). 보관 폴더 밖은 거부한다. */
 export async function deleteFile(sid: string, fullPath: string): Promise<void> {
   if (!isUnderBaseDir(fullPath)) throw new SynologyError("보관 폴더 밖의 파일은 지울 수 없습니다");
-  // 행사 폴더 자체(바로 아래 한 칸)는 지우지 않는다 — 폴더 안의 파일 하나만 지울 수 있다
-  if (fullPath.slice(nasBaseDir().length + 1).split("/").filter(Boolean).length !== 2) {
+  // 행사 폴더 자체(바로 아래 한 칸)와 하위 폴더 자체는 지우지 않는다.
+  // 지울 수 있는 것: 행사 폴더 안의 파일(2칸), 자료 폴더(디자인·기타 자료) 안의 파일(3칸)
+  const segs = fullPath.slice(nasBaseDir().length + 1).split("/").filter(Boolean);
+  const inMaterialFolder = segs.length === 3 && (MATERIAL_FOLDERS as readonly string[]).includes(segs[1]);
+  const isMaterialFolderItself = segs.length === 2 && (MATERIAL_FOLDERS as readonly string[]).includes(segs[1]);
+  if ((segs.length !== 2 && !inMaterialFolder) || isMaterialFolderItself) {
     throw new SynologyError("행사 폴더 안의 파일만 지울 수 있습니다");
   }
   await fileCall(
