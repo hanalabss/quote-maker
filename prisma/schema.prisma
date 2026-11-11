@@ -25,6 +25,7 @@ model User {
   reviewedQuotes Quote[] @relation("ReviewedBy")
   assignedQuotes Quote[] @relation("DevAssignee")
   comments       QuoteComment[]
+  uploadedPrograms QuoteProgram[]
 }
 
 model Module {
@@ -112,6 +113,7 @@ model Quote {
 
   items           QuoteItem[]
   comments        QuoteComment[]
+  programs        QuoteProgram[]
 
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
@@ -166,6 +168,25 @@ model QuoteComment {
 }
 
 // 참고 견적 (과거 우리가 보낸 견적, 매출 관리/단가 baseline 참고용)
+// 완료 프로그램(설치 파일) — 실제 파일은 회사 Synology NAS에 있고 여기에는 위치·공유 링크만 둔다
+model QuoteProgram {
+  id           String   @id @default(cuid())
+  quoteId      String
+  quote        Quote    @relation(fields: [quoteId], references: [id], onDelete: Cascade)
+  fileName     String   // 올린 사람이 고른 원래 파일명
+  size         Int      // bytes
+  version      String?
+  note         String?
+  nasPath      String   // NAS 안 전체 경로 (/개발팀/완료 프로그램/QT-…/파일명)
+  shareId      String   // Synology 공유 링크 id
+  shareUrl     String   // 공유 링크 — 권한 확인 후 서버가 넘겨줄 때만 쓴다 (목록 응답에 넣지 않는다)
+  uploadedById String?
+  uploadedBy   User?    @relation(fields: [uploadedById], references: [id], onDelete: SetNull)
+  createdAt    DateTime @default(now())
+
+  @@index([quoteId])
+}
+
 model ReferenceQuote {
   id            String   @id @default(cuid())
   source        String   // 협력사: "원카드시스템"

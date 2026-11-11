@@ -41,6 +41,7 @@ import { getLifecycleBadge, todayStr } from "@/lib/lifecycle";
 import { RequestEditModal } from "@/components/RequestEditModal";
 import { CalendarColorPicker } from "@/components/quote/CalendarColorPicker";
 import { QuoteComments, type QuoteCommentType } from "@/components/quote/QuoteComments";
+import { QuotePrograms } from "@/components/quote/QuotePrograms";
 
 interface QuoteItem {
   id: string;
@@ -1039,6 +1040,9 @@ export default function QuoteDetailPage({
               </div>
             </div>
           )}
+
+          {/* 완료 프로그램 (Synology NAS 보관) — 개발팀이 올리고, 개발팀·해당 견적 사업팀이 받는다 */}
+          <QuotePrograms quoteId={quote.id} />
         </div>
 
         {/* 메인: 견적 항목 + 검토/댓글 */}
