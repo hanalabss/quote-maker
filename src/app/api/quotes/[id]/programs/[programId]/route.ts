@@ -5,6 +5,9 @@ import { canAccessQuote } from "@/lib/quoteAccess";
 import { canUploadProgram } from "@/lib/programUpload";
 import { SynologyError, deleteFile, deleteShareLink, synologyConfigured, withSession } from "@/lib/synology";
 
+// 삭제가 NAS에 닿는다 — NAS는 해외 IP를 막으므로 서울 리전에서 돌린다 (complete/route.ts 참고)
+export const preferredRegion = "icn1";
+
 async function load(id: string, programId: string) {
   return prisma.quoteProgram.findFirst({
     where: { id: programId, quoteId: id },
