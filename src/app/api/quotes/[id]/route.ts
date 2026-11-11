@@ -683,67 +683,6 @@ export async function PATCH(
     return NextResponse.json(redactQuotePrices(updated, user.role));
   }
 
-  // 첨부 추가 (시안 등은 대개 확정 후에 들어온다) — 사업팀 본인 또는 dev, 반려/미진행 제외
-  // 파일 자체는 /api/upload로 먼저 올리고, 여기서는 메타데이터만 붙인다. 삭제는 지원하지 않음(추가만).
-  if (Array.isArray(body.addAttachments)) {
-    if (["rejected", "lost"].includes(quote.status)) {
-      return NextResponse.json({ error: "반려/미진행 견적에는 첨부를 추가할 수 없습니다" }, { status: 400 });
-    }
-    if (user.role === "sales") {
-      if (quote.createdById !== user.id) {
-        return NextResponse.json({ error: "본인 견적만 수정할 수 있습니다" }, { status: 403 });
-      }
-    } else if (user.role !== "dev") {
-      return NextResponse.json({ error: "권한이 없습니다" }, { status: 403 });
-    }
-    type Att = { fileName: string; originalName: string; size: number; mimeType: string };
-    const incoming = body.addAttachments as unknown[];
-    const valid = (a: unknown): a is Att => {
-      if (!a || typeof a !== "object") return false;
-      const o = a as Record<string, unknown>;
-      return (
-        typeof o.fileName === "string" &&
-        /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}(\.[A-Za-z0-9]{1,10})?$/.test(o.fileName) &&
-        typeof o.originalName === "string" && o.originalName.length > 0 && o.originalName.length <= 255 &&
-        typeof o.size === "number" && o.size >= 0 && o.size <= 20 * 1024 * 1024 &&
-        typeof o.mimeType === "string" && o.mimeType.length <= 200
-      );
-    };
-    if (incoming.length === 0 || incoming.length > 20 || !incoming.every(valid)) {
-      return NextResponse.json({ error: "첨부 정보가 올바르지 않습니다" }, { status: 400 });
-    }
-    const existing = (Array.isArray(quote.attachments) ? quote.attachments : []) as unknown as Att[];
-    const known = new Set(existing.map((a) => a.fileName));
-    const toAdd = (incoming as Att[])
-      .filter((a) => !known.has(a.fileName))
-      .map((a) => ({ fileName: a.fileName, originalName: a.originalName, size: a.size, mimeType: a.mimeType }));
-    if (toAdd.length === 0) {
-      return NextResponse.json({ error: "이미 첨부된 파일입니다" }, { status: 400 });
-    }
-    await prisma.$transaction(async (tx) => {
-      await tx.quote.update({ where: { id }, data: { attachments: [...existing, ...toAdd] } });
-      await tx.quoteComment.create({
-        data: {
-          quoteId: id,
-          userId: user.id,
-          visibility: "dev",
-          content: ["[첨부 추가]", ...toAdd.map((a) => `- ${a.originalName}`)].join("\n"),
-        },
-      });
-    });
-    const updated = await prisma.quote.findUnique({
-      where: { id },
-      include: {
-        items: { orderBy: { sortOrder: "asc" } },
-        createdBy: { select: { name: true, team: true, email: true, role: true } },
-        reviewedBy: { select: { name: true } },
-        devAssignee: { select: { id: true, name: true, role: true } },
-        comments: commentsInclude(user.role),
-      },
-    });
-    return NextResponse.json(redactQuotePrices(updated, user.role));
-  }
-
   // 항목 수정 (개발팀 검토 시)
   if (body.items) {
     if (user.role !== "dev") {

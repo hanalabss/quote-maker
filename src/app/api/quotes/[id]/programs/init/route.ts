@@ -1,8 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
 import { randomUUID } from "crypto";
 import { supabase, STORAGE_BUCKET } from "@/lib/supabase";
-import { fail, programContext } from "@/lib/programAccess";
-import { PROGRAM_PART_SIZE, PROGRAM_TMP_PREFIX, partCount, tmpPartPath, validateProgramFile } from "@/lib/programUpload";
+import { ensureEventFolder, fail, nasFail, programContext } from "@/lib/programAccess";
+import {
+  PROGRAM_PART_SIZE,
+  PROGRAM_TMP_PREFIX,
+  materialUploadOpen,
+  parseUploadDir,
+  partCount,
+  tmpPartPath,
+  validateProgramFile,
+} from "@/lib/programUpload";
 
 const STALE_MS = 6 * 60 * 60 * 1000; // 6시간 넘은 임시 조각은 중단된 업로드로 보고 지운다
 
@@ -25,21 +33,36 @@ async function cleanupStale(quoteId: string) {
   }
 }
 
-// 올리기 시작 — 조각별 임시 업로드 주소를 내준다. 개발팀만, 행사 폴더가 연결된 견적만.
+// 올리기 시작 — 조각별 임시 업로드 주소를 내준다.
+//   완료 프로그램(dir 없음): 개발팀만, 행사 폴더가 연결된 견적만
+//   자료(dir = 디자인·기타 자료): 견적을 볼 수 있는 사람. 행사 폴더가 없으면 행사명으로 만들어 연결한다
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
   const { id } = await params;
-  const ctx = await programContext(id, { manage: true, nas: true });
+  const body = (await request.json().catch(() => null)) as { fileName?: unknown; size?: unknown; dir?: unknown } | null;
+  const dir = parseUploadDir(body?.dir);
+  const ctx = await programContext(id, { manage: dir === "", nas: true });
   if (ctx instanceof NextResponse) return ctx;
-  if (!ctx.quote.programFolder) return fail("먼저 NAS 행사 폴더를 연결해 주세요", 409);
+  if (dir === null) return fail("잘못된 요청입니다", 400);
+  if (dir && !materialUploadOpen(ctx.quote.status)) return fail("반려·미진행 견적에는 자료를 올릴 수 없습니다", 400);
+  if (!dir && !ctx.quote.programFolder) return fail("먼저 NAS 행사 폴더를 연결해 주세요", 409);
 
-  const body = (await request.json().catch(() => null)) as { fileName?: unknown; size?: unknown } | null;
   const fileName = typeof body?.fileName === "string" ? body.fileName : "";
   const size = typeof body?.size === "number" ? body.size : NaN;
-  const invalid = validateProgramFile(fileName, size);
+  const invalid = validateProgramFile(fileName, size, dir);
   if (invalid) return fail(invalid, 400);
+
+  let folderCreated = false;
+  if (!ctx.quote.programFolder) {
+    try {
+      await ensureEventFolder(ctx.quote, ctx.user.id);
+      folderCreated = true;
+    } catch (e) {
+      return nasFail(e, "행사 폴더를 만들지 못했습니다");
+    }
+  }
 
   await cleanupStale(id);
 
@@ -56,5 +79,5 @@ export async function POST(
     parts.push({ index: i, url: data.signedUrl });
   }
 
-  return NextResponse.json({ uploadId, partSize: PROGRAM_PART_SIZE, parts });
+  return NextResponse.json({ uploadId, partSize: PROGRAM_PART_SIZE, parts, folderCreated });
 }

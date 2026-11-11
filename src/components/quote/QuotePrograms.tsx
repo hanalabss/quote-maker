@@ -5,9 +5,12 @@ import {
   Check,
   Download,
   ExternalLink,
+  FileText,
   Folder,
+  FolderOpen,
   FolderPlus,
   FolderSearch,
+  Image as ImageIcon,
   Loader2,
   Package,
   RefreshCw,
@@ -15,10 +18,21 @@ import {
   Unlink,
   Upload,
 } from "lucide-react";
-import { PROGRAM_EXTENSIONS, formatBytes, sanitizeFolderName, validateProgramFile } from "@/lib/programUpload";
+import {
+  MATERIAL_EXTENSIONS,
+  MATERIAL_FOLDERS,
+  PROGRAM_EXTENSIONS,
+  fileExtension,
+  formatBytes,
+  sanitizeFolderName,
+  validateProgramFile,
+  type UploadDir,
+} from "@/lib/programUpload";
 
-// 완료 프로그램 — 견적에 연결된 NAS 행사 폴더의 내용을 그대로 보여 준다.
-// 개발팀: 폴더 연결·올리기·(웹에서 올린 파일) 지우기 / 개발팀 + 해당 견적 사업팀: 보기·받기·폴더 열기
+// 행사 자료 — 견적에 연결된 NAS 행사 폴더를 세 칸으로 나눠 보여 준다.
+//   디자인 · 기타 자료 (행사 폴더 아래 같은 이름의 하위 폴더): 개발팀과 그 견적을 요청한 사업팀이 올리고 받는다. 지우기는 올린 본인과 개발팀.
+//   완료 프로그램 (행사 폴더 바로 아래): 개발팀이 올리고, 개발팀·해당 견적 사업팀이 받는다.
+// 폴더가 아직 연결되지 않은 견적에 자료를 올리면 행사명으로 행사 폴더가 만들어진다.
 
 interface NasFile {
   name: string;
@@ -26,6 +40,7 @@ interface NasFile {
   size: number;
   mtime: number;
   viaWeb: boolean;
+  canDelete: boolean;
   version: string | null;
   note: string | null;
   uploadedBy: string | null;
@@ -33,6 +48,7 @@ interface NasFile {
 
 interface ProgramState {
   canManage: boolean;
+  canUploadMaterial: boolean;
   configured: boolean;
   baseDir: string;
   eventName: string;
@@ -40,22 +56,32 @@ interface ProgramState {
   folderMissing: boolean;
   nasError: string | null;
   files: NasFile[];
+  materials: { dir: UploadDir; files: NasFile[] }[];
 }
 
 type FolderOption = { name: string; suggested: boolean };
 
-type Progress =
+type Progress = { index: number; count: number; name: string } & (
   | { stage: "upload"; percent: number } // 내 PC → 서버 임시 보관
   | { stage: "nas"; percent: number } // 서버 → NAS 행사 폴더
-  | { stage: "login" | "verify" | "share" };
+  | { stage: "login" | "verify" | "share" }
+);
 
 const STAGE_LABEL: Record<Progress["stage"], string> = {
   upload: "서버로 보내는 중",
   login: "NAS 연결 중",
-  nas: "NAS 행사 폴더로 옮기는 중",
+  nas: "NAS 폴더로 옮기는 중",
   verify: "NAS에 저장된 파일 확인 중",
   share: "받기 링크 만드는 중",
 };
+
+const TABS: { dir: UploadDir; label: string; empty: string }[] = [
+  { dir: MATERIAL_FOLDERS[0], label: "디자인", empty: "아직 올라온 시안이 없습니다." },
+  { dir: MATERIAL_FOLDERS[1], label: "기타 자료", empty: "문구·로고·참고 문서처럼 시안이 아닌 자료가 여기에 모입니다." },
+  { dir: "", label: "완료 프로그램", empty: "아직 올라온 설치 파일이 없습니다." },
+];
+
+const IMAGE_EXT = [".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp", ".tif", ".tiff", ".svg", ".heic", ".ai", ".psd", ".eps"];
 
 function putPart(url: string, blob: Blob, onProgress: (loaded: number) => void): Promise<void> {
   return new Promise((resolve, reject) => {
@@ -93,6 +119,7 @@ export function QuotePrograms({ quoteId }: { quoteId: string }) {
   const [state, setState] = useState<ProgramState | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [tab, setTab] = useState<UploadDir | null>(null); // null = 아직 고르지 않음 (파일이 있는 첫 칸을 연다)
 
   // 폴더 연결
   const [picking, setPicking] = useState(false);
@@ -103,10 +130,11 @@ export function QuotePrograms({ quoteId }: { quoteId: string }) {
 
   // 올리기
   const [formOpen, setFormOpen] = useState(false);
-  const [file, setFile] = useState<File | null>(null);
+  const [picked, setPicked] = useState<File[]>([]);
   const [version, setVersion] = useState("");
   const [note, setNote] = useState("");
   const [progress, setProgress] = useState<Progress | null>(null);
+  const [dragging, setDragging] = useState(false);
   const [deleting, setDeleting] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -178,105 +206,129 @@ export function QuotePrograms({ quoteId }: { quoteId: string }) {
   };
 
   const resetForm = () => {
-    setFile(null);
+    setPicked([]);
     setVersion("");
     setNote("");
     setFormOpen(false);
     if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
-  const pickFile = (f: File | null) => {
+  const switchTab = (dir: UploadDir) => {
+    if (progress) return;
+    setTab(dir);
     setError(null);
-    if (!f) return setFile(null);
-    const invalid = validateProgramFile(f.name, f.size);
-    if (invalid) {
-      setError(invalid);
-      setFile(null);
-      if (fileInputRef.current) fileInputRef.current.value = "";
-      return;
-    }
-    setFile(f);
+    resetForm();
   };
 
-  const upload = async () => {
-    if (!file || progress) return;
+  // 고른 파일 검사 — 하나라도 올릴 수 없으면 무엇이 왜 안 되는지 알려 주고 나머지만 남긴다
+  const pickFiles = (list: File[], dir: UploadDir) => {
     setError(null);
-    setProgress({ stage: "upload", percent: 0 });
+    const files = dir ? list : list.slice(0, 1);
+    const ok: File[] = [];
+    const bad: string[] = [];
+    for (const f of files) {
+      const invalid = validateProgramFile(f.name, f.size, dir);
+      if (invalid) bad.push(`${f.name}: ${invalid}`);
+      else ok.push(f);
+    }
+    if (bad.length) setError(bad.join("\n"));
+    setPicked(ok);
+    if (ok.length) setFormOpen(true);
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  };
+
+  const uploadOne = async (file: File, dir: UploadDir, index: number, count: number) => {
+    const at = { index, count, name: file.name };
+    setProgress({ ...at, stage: "upload", percent: 0 });
+
+    // 1) 조각별 임시 주소 받기 (연결된 행사 폴더가 없으면 이때 만들어진다)
+    const initRes = await fetch(`${api}/init`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ fileName: file.name, size: file.size, dir }),
+    });
+    const init = await initRes.json().catch(() => ({}));
+    if (!initRes.ok) throw new Error(init.error || "올리기를 시작하지 못했습니다");
+
+    // 2) 조각 올리기
+    const partSize: number = init.partSize;
+    let done = 0;
+    for (const part of init.parts as { index: number; url: string }[]) {
+      const blob = file.slice(part.index * partSize, (part.index + 1) * partSize);
+      await putPartWithRetry(part.url, blob, (loadedBytes) => {
+        setProgress({ ...at, stage: "upload", percent: Math.floor(((done + loadedBytes) / file.size) * 100) });
+      }).catch(() => {
+        throw new Error("보내는 중 연결이 끊겼습니다. 다시 시도해 주세요");
+      });
+      done += blob.size;
+    }
+
+    // 3) 서버가 NAS로 옮기는 동안 진행 상황을 줄 단위로 받는다
+    setProgress({ ...at, stage: "login" });
+    const res = await fetch(`${api}/complete`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ uploadId: init.uploadId, fileName: file.name, size: file.size, version, note, dir }),
+    });
+    if (!res.ok || !res.body) {
+      const data = await res.json().catch(() => ({}));
+      throw new Error(data.error || "NAS로 옮기지 못했습니다");
+    }
+
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+    let finished = false;
+    const handle = (line: string) => {
+      if (!line.trim()) return;
+      const msg = JSON.parse(line);
+      if (msg.error) throw new Error(msg.error);
+      if (msg.done) finished = true;
+      else if (msg.stage === "nas") setProgress({ ...at, stage: "nas", percent: Math.floor((msg.sent / msg.total) * 100) });
+      else if (msg.stage === "login" || msg.stage === "verify" || msg.stage === "share") setProgress({ ...at, stage: msg.stage });
+    };
+    for (;;) {
+      const { value, done: end } = await reader.read();
+      if (value) buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split("\n");
+      buffer = lines.pop() ?? "";
+      lines.forEach(handle);
+      if (end) break;
+    }
+    handle(buffer);
+    if (!finished) {
+      throw new Error("서버 응답이 중간에 끊겼습니다. 목록에 파일이 보이지 않으면 다시 올려 주세요");
+    }
+  };
+
+  const upload = async (dir: UploadDir) => {
+    if (!picked.length || progress) return;
+    setError(null);
+    let sent = 0;
+    let failure: string | null = null;
     try {
-      // 1) 조각별 임시 주소 받기
-      const initRes = await fetch(`${api}/init`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ fileName: file.name, size: file.size }),
-      });
-      const init = await initRes.json().catch(() => ({}));
-      if (!initRes.ok) throw new Error(init.error || "올리기를 시작하지 못했습니다");
-
-      // 2) 조각 올리기
-      const partSize: number = init.partSize;
-      let done = 0;
-      for (const part of init.parts as { index: number; url: string }[]) {
-        const blob = file.slice(part.index * partSize, (part.index + 1) * partSize);
-        await putPartWithRetry(part.url, blob, (loadedBytes) => {
-          setProgress({ stage: "upload", percent: Math.floor(((done + loadedBytes) / file.size) * 100) });
-        }).catch(() => {
-          throw new Error("보내는 중 연결이 끊겼습니다. 다시 시도해 주세요");
-        });
-        done += blob.size;
+      for (const file of picked) {
+        await uploadOne(file, dir, sent + 1, picked.length);
+        sent++;
       }
-
-      // 3) 서버가 NAS로 옮기는 동안 진행 상황을 줄 단위로 받는다
-      setProgress({ stage: "login" });
-      const res = await fetch(`${api}/complete`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ uploadId: init.uploadId, fileName: file.name, size: file.size, version, note }),
-      });
-      if (!res.ok || !res.body) {
-        const data = await res.json().catch(() => ({}));
-        throw new Error(data.error || "NAS로 옮기지 못했습니다");
-      }
-
-      const reader = res.body.getReader();
-      const decoder = new TextDecoder();
-      let buffer = "";
-      let finished = false;
-      const handle = (line: string) => {
-        if (!line.trim()) return;
-        const msg = JSON.parse(line);
-        if (msg.error) throw new Error(msg.error);
-        if (msg.done) finished = true;
-        else if (msg.stage === "nas") setProgress({ stage: "nas", percent: Math.floor((msg.sent / msg.total) * 100) });
-        else if (msg.stage === "login" || msg.stage === "verify" || msg.stage === "share") setProgress({ stage: msg.stage });
-      };
-      for (;;) {
-        const { value, done: end } = await reader.read();
-        if (value) buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split("\n");
-        buffer = lines.pop() ?? "";
-        lines.forEach(handle);
-        if (end) break;
-      }
-      handle(buffer);
-      // 목록은 항상 NAS에서 다시 읽는다 — 화면이 실제 폴더 상태와 어긋나지 않게
-      await load();
-      if (!finished) {
-        throw new Error("서버 응답이 중간에 끊겼습니다. 목록에 파일이 보이지 않으면 다시 올려 주세요");
-      }
-      resetForm();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "올리지 못했습니다");
-    } finally {
-      setProgress(null);
+      failure = e instanceof Error ? e.message : "올리지 못했습니다";
     }
+    // 목록은 항상 NAS에서 다시 읽는다 — 화면이 실제 폴더 상태와 어긋나지 않게. 다 읽을 때까지 진행 표시를 둔다.
+    await load().catch(() => {});
+    setProgress(null);
+    if (failure === null) return resetForm();
+    // 앞의 파일은 이미 올라갔다 — 남은 것만 다시 올릴 수 있게 둔다
+    setError(picked.length > 1 ? `${picked[sent].name}: ${failure}${sent ? ` (앞의 ${sent}개는 올라갔습니다)` : ""}` : failure);
+    setPicked(picked.slice(sent));
   };
 
-  const remove = async (f: NasFile) => {
+  const remove = async (f: NasFile, dir: UploadDir) => {
     if (!confirm(`"${f.name}" 을(를) 지울까요?\nNAS 행사 폴더에서도 지워집니다 (NAS 휴지통으로 이동).`)) return;
     setDeleting(f.name);
     setError(null);
     try {
-      const res = await fetch(`${api}/file?name=${encodeURIComponent(f.name)}`, { method: "DELETE" });
+      const res = await fetch(`${api}/file?name=${encodeURIComponent(f.name)}&dir=${encodeURIComponent(dir)}`, { method: "DELETE" });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error || "지우지 못했습니다");
       await load();
@@ -293,32 +345,43 @@ export function QuotePrograms({ quoteId }: { quoteId: string }) {
   }, [folders, filter]);
 
   if (!state) return null;
-  const { canManage, configured, folder, files } = state;
-  const downloadable = files.filter((f) => !f.isDir);
+  const { canManage, canUploadMaterial, configured, folder } = state;
 
-  // 사업팀은 받을 파일이 있을 때만 이 칸을 본다
-  if (!canManage && (!folder || downloadable.length === 0)) return null;
+  const filesOf = (dir: UploadDir) => (dir ? (state.materials.find((m) => m.dir === dir)?.files ?? []) : state.files);
+  const countOf = (dir: UploadDir) => filesOf(dir).filter((f) => !f.isDir).length;
+  const total = TABS.reduce((sum, t) => sum + countOf(t.dir), 0);
+
+  // 사업팀: NAS 연동이 없으면 쓸 수 없고, 올릴 수 없는 견적(반려·미진행)은 받을 파일이 있을 때만 보인다
+  if (!canManage && (!configured || (!canUploadMaterial && total === 0))) return null;
+
+  const current: UploadDir = tab ?? TABS.find((t) => countOf(t.dir) > 0)?.dir ?? TABS[0].dir;
+  const currentTab = TABS.find((t) => t.dir === current) ?? TABS[0];
+  const files = filesOf(current);
+  const blocked = state.folderMissing || !!state.nasError;
+  const canUploadHere = configured && !blocked && (current ? canUploadMaterial : canManage && !!folder);
 
   const crumbs = state.baseDir.split("/").filter(Boolean);
-  const fullPath = folder ? `${state.baseDir}/${folder}` : state.baseDir;
+  const fullPath = [state.baseDir, folder, current].filter(Boolean).join("/");
   const cleanNewName = sanitizeFolderName(newName);
   const newNameTaken = !!folders?.some((f) => f.name === cleanNewName);
   const percent = progress && "percent" in progress ? progress.percent : null;
   const uploadFill = !progress ? 0 : progress.stage === "upload" ? progress.percent : 100;
   const nasFill = !progress ? 0 : progress.stage === "nas" ? progress.percent : progress.stage === "verify" || progress.stage === "share" ? 100 : 0;
+  const fileHref = (name: string) => `${api}/file?name=${encodeURIComponent(name)}&dir=${encodeURIComponent(current)}`;
 
   return (
-    <section className="bg-white rounded-xl border p-5" aria-label="완료 프로그램">
+    <section className="bg-white rounded-xl border p-5" aria-label="행사 자료">
       <div className="flex items-center justify-between mb-3">
         <h3 className="font-medium flex items-center gap-1.5">
-          <Package className="w-4 h-4" />
-          완료 프로그램{folder ? ` (${downloadable.length})` : ""}
+          <FolderOpen className="w-4 h-4" />
+          행사 자료{total ? ` (${total})` : ""}
         </h3>
         {folder && (
           <button
             onClick={load}
             disabled={loading}
             title="NAS 폴더 다시 읽기"
+            aria-label="NAS 폴더 다시 읽기"
             className="p-1 -m-1 text-gray-400 hover:text-gray-700 disabled:opacity-50 rounded focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-500"
           >
             <RefreshCw className={`w-3.5 h-3.5 ${loading ? "animate-spin motion-reduce:animate-none" : ""}`} />
@@ -330,21 +393,6 @@ export function QuotePrograms({ quoteId }: { quoteId: string }) {
         <p className="text-xs text-amber-800 bg-amber-50 rounded-lg p-2.5">
           NAS 연동이 아직 설정되지 않아 쓸 수 없습니다. (서버 환경변수 미설정)
         </p>
-      )}
-
-      {/* 연결 전 — 폴더를 고르는 것이 첫 단계 */}
-      {configured && !folder && !picking && (
-        <div className="rounded-lg border border-dashed border-gray-300 p-4 text-center">
-          <p className="text-sm text-gray-700">연결된 NAS 행사 폴더가 없습니다</p>
-          <p className="text-xs text-gray-500 mt-1">[행사 자료] 아래 폴더를 연결하면 그 안의 파일이 여기에 보입니다.</p>
-          <button
-            onClick={openPicker}
-            className="mt-3 inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-md bg-blue-600 text-white hover:bg-blue-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500"
-          >
-            <FolderSearch className="w-3.5 h-3.5" />
-            행사 폴더 연결
-          </button>
-        </div>
       )}
 
       {/* 폴더 고르기 */}
@@ -420,21 +468,24 @@ export function QuotePrograms({ quoteId }: { quoteId: string }) {
         </div>
       )}
 
-      {/* 연결 후 — NAS 주소 표시줄 + 폴더 내용 */}
-      {folder && !picking && (
+      {configured && !picking && (
         <>
           <div className="rounded-lg border border-gray-200 overflow-hidden">
+            {/* NAS 주소 표시줄 — 지금 보고 있는 칸의 실제 위치 */}
             <div className="flex items-stretch bg-slate-50 border-b border-gray-200">
-              <div className="flex-1 min-w-0 px-3 py-2" title={fullPath}>
-                <div className="text-[11px] text-gray-500 truncate">
-                  NAS › {crumbs.slice(-2).join(" › ")}
-                </div>
-                <div className="flex items-center gap-1.5 text-sm font-medium text-gray-900">
-                  <Folder className="w-4 h-4 text-blue-600 shrink-0" />
-                  <span className="truncate">{folder}</span>
-                </div>
+              <div className="flex-1 min-w-0 px-3 py-2" title={folder ? fullPath : undefined}>
+                <div className="text-[11px] text-gray-500 truncate">NAS › {crumbs.slice(-2).join(" › ")}</div>
+                {folder ? (
+                  <div className="flex items-center gap-1.5 text-sm font-medium text-gray-900">
+                    <Folder className="w-4 h-4 text-blue-600 shrink-0" />
+                    <span className="truncate">{folder}</span>
+                    {current && <span className="font-normal text-gray-500 shrink-0">› {current}</span>}
+                  </div>
+                ) : (
+                  <div className="text-sm text-gray-600">행사 폴더가 아직 없습니다</div>
+                )}
               </div>
-              {!state.folderMissing && (
+              {folder && !state.folderMissing && (
                 <a
                   href={`${api}/open`}
                   target="_blank"
@@ -447,114 +498,192 @@ export function QuotePrograms({ quoteId }: { quoteId: string }) {
               )}
             </div>
 
-            {state.folderMissing ? (
-              <p className="p-3 text-xs text-red-700 bg-red-50">
-                NAS에서 이 폴더를 찾을 수 없습니다. 이름이 바뀌었거나 지워졌을 수 있습니다.
-                {canManage && " 아래에서 폴더를 다시 연결해 주세요."}
-              </p>
-            ) : state.nasError ? (
-              <p className="p-3 text-xs text-red-700 bg-red-50">{state.nasError}. 오른쪽 위 새로 고침으로 다시 시도해 주세요.</p>
-            ) : files.length === 0 ? (
-              <p className="p-3 text-xs text-gray-500">폴더가 비어 있습니다.{canManage && " 아래에서 설치 파일을 올려 주세요."}</p>
-            ) : (
-              <ul className="divide-y divide-gray-100">
-                {files.map((f) => (
-                  <li key={(f.isDir ? "d:" : "f:") + f.name} className="flex items-center gap-2 px-3 py-2.5">
-                    {f.isDir ? <Folder className="w-4 h-4 text-gray-400 shrink-0" /> : <Package className="w-4 h-4 text-gray-500 shrink-0" />}
-                    <div className="flex-1 min-w-0">
-                      <div className="text-sm text-gray-900 break-all leading-snug">
-                        {f.name}
-                        {f.version && <span className="ml-1.5 text-xs text-blue-700 whitespace-nowrap">{f.version}</span>}
-                      </div>
-                      <div className="text-xs text-gray-500">
-                        {f.isDir ? "하위 폴더 (폴더 열기에서 확인)" : `${fmtDate(f.mtime)} ${f.uploadedBy ? `${f.uploadedBy} 올림` : "NAS에 직접 넣음"}`}
-                      </div>
-                      {f.note && <div className="text-xs text-gray-600 break-words mt-0.5">{f.note}</div>}
-                    </div>
-                    {!f.isDir && (
-                      <>
-                        <span className="text-xs text-gray-500 tabular-nums shrink-0">{formatBytes(f.size)}</span>
-                        <a
-                          href={`${api}/file?name=${encodeURIComponent(f.name)}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          title={`${f.name} 받기`}
-                          aria-label={`${f.name} 받기`}
-                          className="p-1.5 -my-1 rounded text-blue-700 hover:bg-blue-50 shrink-0 focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-500"
-                        >
-                          <Download className="w-4 h-4" />
-                        </a>
-                        {canManage && f.viaWeb && (
-                          <button
-                            onClick={() => remove(f)}
-                            disabled={deleting === f.name}
-                            title={`${f.name} 지우기`}
-                            aria-label={`${f.name} 지우기`}
-                            className="p-1.5 -my-1 -ml-1 rounded text-gray-400 hover:text-red-600 hover:bg-red-50 disabled:opacity-50 shrink-0 focus-visible:outline focus-visible:outline-2 focus-visible:outline-red-500"
-                          >
-                            {deleting === f.name ? <Loader2 className="w-4 h-4 animate-spin motion-reduce:animate-none" /> : <Trash2 className="w-4 h-4" />}
-                          </button>
+            {/* 칸 고르기 — 행사 폴더 아래 하위 폴더와 같은 구성 */}
+            <div role="tablist" aria-label="자료 종류" className="flex border-b border-gray-200">
+              {TABS.map((t) => {
+                const active = t.dir === current;
+                const n = countOf(t.dir);
+                return (
+                  <button
+                    key={t.label}
+                    role="tab"
+                    aria-selected={active}
+                    disabled={!!progress}
+                    onClick={() => switchTab(t.dir)}
+                    className={`flex-auto px-1 py-2 text-xs border-b-2 -mb-px whitespace-nowrap focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-blue-500 ${
+                      active ? "border-blue-600 text-blue-700 font-medium" : "border-transparent text-gray-600 hover:text-gray-900 hover:bg-slate-50"
+                    }`}
+                  >
+                    {t.label}
+                    <span className={`ml-1 tabular-nums ${active ? "text-blue-700" : "text-gray-400"}`}>{n}</span>
+                  </button>
+                );
+              })}
+            </div>
+
+            <div role="tabpanel" aria-label={currentTab.label}>
+              {state.folderMissing ? (
+                <p className="p-3 text-xs text-red-700 bg-red-50">
+                  NAS에서 이 폴더를 찾을 수 없습니다. 이름이 바뀌었거나 지워졌을 수 있습니다.
+                  {canManage ? " 아래에서 폴더를 다시 연결해 주세요." : " 개발팀에 알려 주세요."}
+                </p>
+              ) : state.nasError ? (
+                <p className="p-3 text-xs text-red-700 bg-red-50">{state.nasError}. 오른쪽 위 새로 고침으로 다시 시도해 주세요.</p>
+              ) : files.length === 0 ? (
+                <p className="p-3 text-xs text-gray-500">{currentTab.empty}</p>
+              ) : (
+                <ul className="divide-y divide-gray-100">
+                  {files.map((f) => {
+                    const Icon = f.isDir ? Folder : !current ? Package : IMAGE_EXT.includes(fileExtension(f.name)) ? ImageIcon : FileText;
+                    return (
+                      <li key={(f.isDir ? "d:" : "f:") + f.name} className="flex items-center gap-2 px-3 py-2.5">
+                        <Icon className={`w-4 h-4 shrink-0 ${f.isDir ? "text-gray-400" : "text-gray-500"}`} />
+                        <div className="flex-1 min-w-0">
+                          <div className="text-sm text-gray-900 break-all leading-snug">
+                            {f.name}
+                            {f.version && <span className="ml-1.5 text-xs text-blue-700 whitespace-nowrap">{f.version}</span>}
+                          </div>
+                          <div className="text-xs text-gray-500">
+                            {f.isDir ? "하위 폴더 (폴더 열기에서 확인)" : `${fmtDate(f.mtime)} ${f.uploadedBy ? `${f.uploadedBy} 올림` : "NAS에 직접 넣음"}`}
+                          </div>
+                          {f.note && <div className="text-xs text-gray-600 break-words mt-0.5">{f.note}</div>}
+                        </div>
+                        {!f.isDir && (
+                          <>
+                            <span className="text-xs text-gray-500 tabular-nums shrink-0">{formatBytes(f.size)}</span>
+                            <a
+                              href={fileHref(f.name)}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              title={`${f.name} 받기`}
+                              aria-label={`${f.name} 받기`}
+                              className="p-1.5 -my-1 rounded text-blue-700 hover:bg-blue-50 shrink-0 focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-500"
+                            >
+                              <Download className="w-4 h-4" />
+                            </a>
+                            {f.canDelete && (
+                              <button
+                                onClick={() => remove(f, current)}
+                                disabled={deleting === f.name || !!progress}
+                                title={`${f.name} 지우기`}
+                                aria-label={`${f.name} 지우기`}
+                                className="p-1.5 -my-1 -ml-1 rounded text-gray-400 hover:text-red-600 hover:bg-red-50 disabled:opacity-50 shrink-0 focus-visible:outline focus-visible:outline-2 focus-visible:outline-red-500"
+                              >
+                                {deleting === f.name ? <Loader2 className="w-4 h-4 animate-spin motion-reduce:animate-none" /> : <Trash2 className="w-4 h-4" />}
+                              </button>
+                            )}
+                          </>
                         )}
-                      </>
-                    )}
-                  </li>
-                ))}
-              </ul>
-            )}
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+            </div>
           </div>
 
+          {/* 완료 프로그램은 행사 폴더를 연결해야 올릴 수 있다 (개발팀) */}
+          {!current && canManage && !folder && (
+            <div className="mt-3 rounded-lg border border-dashed border-gray-300 p-3 text-center">
+              <p className="text-xs text-gray-600">설치 파일은 NAS 행사 폴더를 연결한 뒤 올릴 수 있습니다.</p>
+              <button
+                onClick={openPicker}
+                className="mt-2 inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-md bg-blue-600 text-white hover:bg-blue-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500"
+              >
+                <FolderSearch className="w-3.5 h-3.5" />
+                행사 폴더 연결
+              </button>
+            </div>
+          )}
+
           {/* 올리기 */}
-          {canManage && !state.folderMissing && !state.nasError && (
+          {canUploadHere && (
             <div className="mt-3">
+              <input
+                ref={fileInputRef}
+                type="file"
+                multiple={!!current}
+                accept={(current ? MATERIAL_EXTENSIONS : PROGRAM_EXTENSIONS).join(",")}
+                aria-label={`${currentTab.label}에 올릴 파일`}
+                onChange={(e) => pickFiles(Array.from(e.target.files ?? []), current)}
+                className="hidden"
+              />
               {!formOpen ? (
                 <button
-                  onClick={() => setFormOpen(true)}
-                  className="w-full flex items-center justify-center gap-1.5 text-xs py-2 rounded-lg border border-dashed border-gray-300 text-gray-700 hover:border-blue-500 hover:text-blue-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-500"
+                  onClick={() => fileInputRef.current?.click()}
+                  onDragOver={(e) => {
+                    e.preventDefault();
+                    setDragging(true);
+                  }}
+                  onDragLeave={() => setDragging(false)}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    setDragging(false);
+                    pickFiles(Array.from(e.dataTransfer.files), current);
+                  }}
+                  className={`w-full flex flex-col items-center justify-center gap-0.5 text-xs py-2.5 rounded-lg border border-dashed focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-500 ${
+                    dragging ? "border-blue-500 bg-blue-50 text-blue-700" : "border-gray-300 text-gray-700 hover:border-blue-500 hover:text-blue-700"
+                  }`}
                 >
-                  <Upload className="w-3.5 h-3.5" />
-                  이 폴더에 파일 올리기
+                  <span className="flex items-center gap-1.5">
+                    <Upload className="w-3.5 h-3.5" />
+                    {currentTab.label}에 파일 올리기
+                  </span>
+                  <span className="text-[11px] text-gray-500">
+                    {current ? "끌어다 놓아도 됩니다 · 파일당 500MB까지" : "zip, exe 등 설치 파일 · 500MB까지"}
+                  </span>
+                  {current && !folder && (
+                    <span className="text-[11px] text-gray-500">처음 올리면 NAS에 행사 폴더가 만들어집니다</span>
+                  )}
                 </button>
               ) : (
                 <div className="rounded-lg border border-gray-200 p-3 space-y-2">
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    accept={PROGRAM_EXTENSIONS.join(",")}
-                    disabled={!!progress}
-                    aria-label="올릴 파일"
-                    onChange={(e) => pickFile(e.target.files?.[0] ?? null)}
-                    className="block w-full text-xs text-gray-600 file:mr-2 file:py-1 file:px-2 file:rounded file:border file:border-gray-300 file:bg-white file:text-xs file:text-gray-700"
-                  />
-                  {file && <div className="text-xs text-gray-500 tabular-nums">{formatBytes(file.size)}</div>}
+                  <ul className="space-y-1">
+                    {picked.map((f, i) => {
+                      const sentAlready = !!progress && i + 1 < progress.index;
+                      return (
+                        <li key={f.name + i} className="flex items-center gap-1.5 text-xs text-gray-700">
+                          {sentAlready ? <Check className="w-3.5 h-3.5 text-blue-600 shrink-0" /> : <span className="w-3.5 shrink-0" />}
+                          <span className="flex-1 min-w-0 break-all">{f.name}</span>
+                          <span className="text-gray-500 tabular-nums shrink-0">{formatBytes(f.size)}</span>
+                        </li>
+                      );
+                    })}
+                  </ul>
                   <div className="grid grid-cols-5 gap-1.5">
-                    <input
-                      value={version}
-                      onChange={(e) => setVersion(e.target.value)}
-                      disabled={!!progress}
-                      maxLength={40}
-                      placeholder="버전 (예: v1.0.2)"
-                      aria-label="버전"
-                      className="col-span-2 min-w-0 text-xs border border-gray-200 rounded px-2 py-1.5 focus:outline-none focus:border-blue-500"
-                    />
+                    {!current && (
+                      <input
+                        value={version}
+                        onChange={(e) => setVersion(e.target.value)}
+                        disabled={!!progress}
+                        maxLength={40}
+                        placeholder="버전 (예: v1.0.2)"
+                        aria-label="버전"
+                        className="col-span-2 min-w-0 text-xs border border-gray-200 rounded px-2 py-1.5 focus:outline-none focus:border-blue-500"
+                      />
+                    )}
                     <input
                       value={note}
                       onChange={(e) => setNote(e.target.value)}
                       disabled={!!progress}
                       maxLength={300}
-                      placeholder="메모 (선택)"
+                      placeholder={current ? "메모 (선택) 예: 2차 수정 시안" : "메모 (선택)"}
                       aria-label="메모"
-                      className="col-span-3 min-w-0 text-xs border border-gray-200 rounded px-2 py-1.5 focus:outline-none focus:border-blue-500"
+                      className={`${current ? "col-span-5" : "col-span-3"} min-w-0 text-xs border border-gray-200 rounded px-2 py-1.5 focus:outline-none focus:border-blue-500`}
                     />
                   </div>
 
                   {progress ? (
                     <div className="space-y-1.5" role="status" aria-live="polite">
-                      <div className="flex items-center justify-between text-xs text-gray-700">
-                        <span className="flex items-center gap-1.5">
-                          <Loader2 className="w-3.5 h-3.5 animate-spin motion-reduce:animate-none" />
-                          {STAGE_LABEL[progress.stage]}
+                      <div className="flex items-center justify-between gap-2 text-xs text-gray-700">
+                        <span className="flex items-center gap-1.5 min-w-0">
+                          <Loader2 className="w-3.5 h-3.5 animate-spin motion-reduce:animate-none shrink-0" />
+                          <span className="truncate">
+                            {progress.count > 1 && `${progress.index}/${progress.count} `}
+                            {STAGE_LABEL[progress.stage]}
+                          </span>
                         </span>
-                        {percent !== null && <span className="tabular-nums">{percent}%</span>}
+                        {percent !== null && <span className="tabular-nums shrink-0">{percent}%</span>}
                       </div>
                       {/* 두 구간: 내 PC → 서버, 서버 → NAS */}
                       <div className="grid grid-cols-2 gap-1" aria-hidden="true">
@@ -577,12 +706,12 @@ export function QuotePrograms({ quoteId }: { quoteId: string }) {
                         취소
                       </button>
                       <button
-                        onClick={upload}
-                        disabled={!file}
+                        onClick={() => upload(current)}
+                        disabled={!picked.length}
                         className="inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-md bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-40 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500"
                       >
                         <Upload className="w-3.5 h-3.5" />
-                        NAS 폴더에 올리기
+                        {picked.length > 1 ? `${picked.length}개 올리기` : "올리기"}
                       </button>
                     </div>
                   )}
@@ -595,18 +724,20 @@ export function QuotePrograms({ quoteId }: { quoteId: string }) {
             <div className="mt-3 flex items-center gap-3 text-xs text-gray-500">
               <button onClick={openPicker} className="inline-flex items-center gap-1 hover:text-blue-700">
                 <FolderSearch className="w-3.5 h-3.5" />
-                다른 폴더로 바꾸기
+                {folder ? "다른 폴더로 바꾸기" : "기존 NAS 폴더 연결"}
               </button>
-              <button onClick={unlink} className="inline-flex items-center gap-1 hover:text-red-600">
-                <Unlink className="w-3.5 h-3.5" />
-                연결 끊기
-              </button>
+              {folder && (
+                <button onClick={unlink} className="inline-flex items-center gap-1 hover:text-red-600">
+                  <Unlink className="w-3.5 h-3.5" />
+                  연결 끊기
+                </button>
+              )}
             </div>
           )}
         </>
       )}
 
-      {error && <p className="mt-3 text-xs text-red-700 bg-red-50 rounded-lg p-2.5 break-words">{error}</p>}
+      {error && <p className="mt-3 text-xs text-red-700 bg-red-50 rounded-lg p-2.5 break-words whitespace-pre-line">{error}</p>}
     </section>
   );
 }

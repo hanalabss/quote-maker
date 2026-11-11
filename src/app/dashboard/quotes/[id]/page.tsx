@@ -380,8 +380,6 @@ export default function QuoteDetailPage({
     printerType: "", printSize: "", networkType: "", screenResolution: "",
     confirmedDate: "", confirmedEndDate: "", devDeadline: "",
   });
-  const [attachUploading, setAttachUploading] = useState(false);
-  const attachInputRef = useRef<HTMLInputElement>(null);
   // baseline 시세 (편집 모드 배지)
   const [baselineStats, setBaselineStats] = useState<BaselineMap | null>(null);
   const { user, isDev, isDevTeam } = useAuth();
@@ -393,7 +391,6 @@ export default function QuoteDetailPage({
     isOwnerOrDev &&
     (["pending", "reviewing", "approved", "on_hold", "confirmed"].includes(quote.status) ||
       (quote.status === "completed" && isDev));
-  const canAddAttachment = !!quote && isOwnerOrDev && !["rejected", "lost"].includes(quote.status);
   const isConfirmedStage = quote?.status === "confirmed" || quote?.status === "completed";
   const router = useRouter();
 
@@ -571,36 +568,6 @@ export default function QuoteDetailPage({
       };
     }
     return { ...rest, eventDate, eventEndDate, deadline };
-  }
-
-  async function addAttachments(files: FileList | null) {
-    if (!files || files.length === 0) return;
-    setAttachUploading(true);
-    try {
-      const formData = new FormData();
-      Array.from(files).forEach((file) => formData.append("files", file));
-      const up = await fetch("/api/upload", { method: "POST", body: formData });
-      const uploaded = await up.json();
-      if (!up.ok) {
-        alert(uploaded.error || "파일 업로드에 실패했습니다");
-        return;
-      }
-      const res = await fetch(`/api/quotes/${id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ addAttachments: uploaded }),
-      });
-      const data = await res.json();
-      if (res.ok) {
-        setQuote(data);
-        if (data.comments) setComments(data.comments);
-      } else {
-        alert(data.error || "첨부 추가에 실패했습니다");
-      }
-    } finally {
-      setAttachUploading(false);
-      if (attachInputRef.current) attachInputRef.current.value = "";
-    }
   }
 
   async function saveBasicInfo() {
@@ -979,36 +946,14 @@ export default function QuoteDetailPage({
             </div>
           )}
 
-          {((quote.attachments && quote.attachments.length > 0) || canAddAttachment) && (
+          {/* 견적을 요청할 때 붙인 파일. 그 뒤의 시안·자료는 아래 "행사 자료"(NAS)에 올린다 */}
+          {quote.attachments && quote.attachments.length > 0 && (
             <div className="bg-white rounded-xl border p-5">
-              <div className="flex items-center justify-between mb-3">
-                <h3 className="font-medium flex items-center gap-1.5">
-                  <Paperclip className="w-4 h-4" />
-                  첨부 파일 ({quote.attachments?.length ?? 0})
-                </h3>
-                {canAddAttachment && (
-                  <>
-                    <input
-                      ref={attachInputRef}
-                      type="file"
-                      multiple
-                      className="hidden"
-                      onChange={(e) => addAttachments(e.target.files)}
-                    />
-                    <button
-                      onClick={() => attachInputRef.current?.click()}
-                      disabled={attachUploading}
-                      className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800 disabled:opacity-50"
-                    >
-                      {attachUploading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Paperclip className="w-3.5 h-3.5" />}
-                      파일 추가
-                    </button>
-                  </>
-                )}
-              </div>
-              {(!quote.attachments || quote.attachments.length === 0) && (
-                <p className="text-xs text-gray-400">첨부 파일이 없습니다. 시안 등은 확정 후에도 추가할 수 있습니다.</p>
-              )}
+              <h3 className="font-medium flex items-center gap-1.5 mb-1">
+                <Paperclip className="w-4 h-4" />
+                요청 때 첨부한 파일 ({quote.attachments.length})
+              </h3>
+              <p className="text-xs text-gray-500 mb-3">추가 시안·자료는 아래 행사 자료에 올려 주세요.</p>
               <div className="space-y-2">
                 {(quote.attachments ?? []).map((file) => (
                   <a
@@ -1041,7 +986,7 @@ export default function QuoteDetailPage({
             </div>
           )}
 
-          {/* 완료 프로그램 (Synology NAS 보관) — 개발팀이 올리고, 개발팀·해당 견적 사업팀이 받는다 */}
+          {/* 행사 자료 (Synology NAS 행사 폴더) — 디자인·기타 자료·완료 프로그램 */}
           <QuotePrograms quoteId={quote.id} />
         </div>
 

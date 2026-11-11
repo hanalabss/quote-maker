@@ -9,6 +9,8 @@ import type { AddressInfo } from "node:net";
 type Seen = { url: string; contentType: string; contentLength: number; body: Buffer };
 const seen: Seen[] = [];
 let uploadReply: unknown = { success: true };
+let dropSessions = 0; // 목록 요청에 "세션 없음(119)"으로 답할 횟수
+let logins = 0;
 let server: http.Server;
 
 before(async () => {
@@ -28,7 +30,11 @@ before(async () => {
       let reply: unknown = { success: true, data: {} };
       if (isUpload) reply = uploadReply;
       else if (form?.get("api") === "SYNO.API.Auth" && form.get("method") === "login") {
+        logins++;
         reply = form.get("passwd") === "right" ? { success: true, data: { sid: "SID123" } } : { success: false, error: { code: 400 } };
+      } else if (form?.get("api") === "SYNO.FileStation.List" && form.get("method") === "list" && dropSessions > 0) {
+        dropSessions--;
+        reply = { success: false, error: { code: 119 } };
       } else if (form?.get("api") === "SYNO.FileStation.List" && form.get("method") === "list") {
         reply = (form.get("folder_path") ?? "").endsWith("없는 폴더")
           ? { success: false, error: { code: 408 } }
@@ -192,8 +198,17 @@ test("삭제는 행사 폴더 안의 파일만 — 그 밖은 NAS에 요청조�
   await assert.rejects(s.deleteFile("SID123", B + "/NHR 기아(2026)/sub/a.zip"), /행사 폴더 안의 파일만/);
   assert.equal(seen.length, before);
 
+  // 자료 폴더 자체, 자료 폴더 아래의 더 깊은 곳도 지울 수 없다
+  await assert.rejects(s.deleteFile("SID123", B + "/NHR 기아(2026)/디자인"), /보관 폴더 밖|행사 폴더 안의 파일만/);
+  await assert.rejects(s.deleteFile("SID123", B + "/NHR 기아(2026)/디자인/sub/a.png"), /행사 폴더 안의 파일만/);
+  assert.equal(seen.length, before);
+
   await s.deleteFile("SID123", B + "/NHR 기아(2026)/a.zip");
   assert.equal(seen.length, before + 1);
+  // 자료 폴더(디자인·기타 자료) 안의 파일은 지울 수 있다
+  await s.deleteFile("SID123", B + "/NHR 기아(2026)/디자인/시안.png");
+  await s.deleteFile("SID123", B + "/NHR 기아(2026)/기타 자료/문구.xlsx");
+  assert.equal(seen.length, before + 3);
 });
 
 test("폴더 목록: NAS 내부 폴더(#recycle 등)는 빼고, 없는 폴더는 null", async () => {
@@ -213,4 +228,30 @@ test("공유 링크 생존 확인 — 없는 id·끊긴 링크·다른 경로는
   assert.equal(await s.shareLinkAlive("SID123", "dead", "/p/a.zip"), false);
   assert.equal(await s.shareLinkAlive("SID123", "none", "/p/a.zip"), false, "NAS는 없는 id 에도 success:true 를 준다");
   assert.equal(await s.shareLinkAlive("SID123", "abc", "/p/other.zip"), false);
+});
+
+test("세션이 끊기면 한 번만 다시 로그인해 처음부터 다시 한다", async () => {
+  const s = await lib();
+  const B = "/공유폴더/①프로그램 개발/개발팀/[행사 자료]";
+
+  dropSessions = 1;
+  logins = 0;
+  const list = await s.withSession((sid) => s.listFolder(sid, B + "/있는 폴더"));
+  assert.equal(list?.length, 2);
+  assert.equal(logins, 2, "새로 로그인해서 다시 했다");
+
+  // 두 번 연속 끊기면 더 하지 않고 오류를 그대로 낸다
+  dropSessions = 2;
+  logins = 0;
+  await assert.rejects(
+    s.withSession((sid) => s.listFolder(sid, B + "/있는 폴더")),
+    (e: Error & { code?: number }) => e.code === 119,
+  );
+  assert.equal(logins, 2);
+  assert.equal(dropSessions, 0);
+
+  // 세션과 무관한 오류는 다시 하지 않는다
+  logins = 0;
+  await assert.rejects(s.withSession(async () => { throw new s.SynologyError("다른 오류", 414); }), /다른 오류/);
+  assert.equal(logins, 1);
 });

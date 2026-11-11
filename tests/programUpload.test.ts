@@ -3,7 +3,12 @@ import assert from "node:assert/strict";
 import {
   PROGRAM_MAX_SIZE,
   PROGRAM_PART_SIZE,
+  MATERIAL_FOLDERS,
+  autoFolderNames,
+  canDeleteMaterial,
   canUploadProgram,
+  materialUploadOpen,
+  parseUploadDir,
   fileExtension,
   formatBytes,
   isUploadId,
@@ -106,4 +111,54 @@ test("폴더 추천: 행사명과 닮은 폴더가 앞에, 안 닮은 것은 추
   assert.equal(r3.some((f) => f.suggested), false, "닮은 폴더가 없으면 아무것도 추천하지 않는다");
   assert.equal(r3.length, folders.length);
   assert.deepEqual(rankFolders("", ["b", "a"]).map((f) => f.name), ["a", "b"]);
+});
+
+test("자료 폴더: 정해진 이름만 — 빈 값은 행사 폴더 바로 아래, 그 밖은 거부", () => {
+  assert.deepEqual([...MATERIAL_FOLDERS], ["디자인", "기타 자료"]);
+  assert.equal(parseUploadDir(undefined), "");
+  assert.equal(parseUploadDir(null), "");
+  assert.equal(parseUploadDir(""), "");
+  assert.equal(parseUploadDir("디자인"), "디자인");
+  assert.equal(parseUploadDir("기타 자료"), "기타 자료");
+  assert.equal(parseUploadDir("../[SK]에디터"), null);
+  assert.equal(parseUploadDir("디자인/.."), null);
+  assert.equal(parseUploadDir("다른 폴더"), null);
+  assert.equal(parseUploadDir(["디자인"]), null);
+});
+
+test("자료 올리기 전 검사: 시안·문서는 되고 실행 파일은 안 된다", () => {
+  assert.equal(validateProgramFile("시안_최종.ai", 120 * 1024 * 1024, "디자인"), null);
+  assert.equal(validateProgramFile("배경.PNG", 100, "디자인"), null);
+  assert.equal(validateProgramFile("문구.xlsx", 100, "기타 자료"), null);
+  assert.equal(validateProgramFile("묶음.zip", 100, "기타 자료"), null);
+  assert.match(validateProgramFile("setup.exe", 100, "디자인") ?? "", /올릴 수 없습니다/);
+  assert.match(validateProgramFile("run.bat", 100, "기타 자료") ?? "", /올릴 수 없습니다/);
+  assert.match(validateProgramFile("시안.png", PROGRAM_MAX_SIZE + 1, "디자인") ?? "", /500MB/);
+  // 완료 프로그램 자리(dir 없음)의 규칙은 그대로
+  assert.match(validateProgramFile("시안.png", 100, "") ?? "", /형식/);
+});
+
+test("자료 권한: 반려·미진행은 닫힘, 지우기는 올린 본인과 개발팀", () => {
+  assert.equal(materialUploadOpen("pending"), true);
+  assert.equal(materialUploadOpen("confirmed"), true);
+  assert.equal(materialUploadOpen("completed"), true);
+  assert.equal(materialUploadOpen("rejected"), false);
+  assert.equal(materialUploadOpen("lost"), false);
+
+  assert.equal(canDeleteMaterial({ id: "s1", role: "sales" }, "s1"), true);
+  assert.equal(canDeleteMaterial({ id: "s1", role: "sales" }, "d1"), false, "사업팀은 남이 올린 것을 못 지운다");
+  assert.equal(canDeleteMaterial({ id: "s1", role: "sales" }, null), false);
+  assert.equal(canDeleteMaterial({ id: "d1", role: "dev" }, "s1"), true);
+  assert.equal(canDeleteMaterial({ id: "d2", role: "dev_staff" }, "s1"), true);
+});
+
+test("자동으로 만드는 행사 폴더 이름: 행사명, 겹치면 견적번호를 붙인다", () => {
+  assert.deepEqual(autoFolderNames("카카오 판교 포토카드", "QT-20261104-001"), [
+    "카카오 판교 포토카드",
+    "카카오 판교 포토카드 (QT-20261104-001)",
+  ]);
+  // 폴더명으로 쓸 수 없는 행사명이면 견적번호로
+  assert.deepEqual(autoFolderNames("a/b", "QT-1"), ["QT-1", "QT-1 자료"]);
+  const [, numbered] = autoFolderNames("가".repeat(100), "QT-20261104-001");
+  assert.ok(numbered.length <= 80 && numbered.endsWith("(QT-20261104-001)"));
 });
