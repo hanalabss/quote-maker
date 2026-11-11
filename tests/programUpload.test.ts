@@ -162,3 +162,11 @@ test("자동으로 만드는 행사 폴더 이름: 행사명, 겹치면 견적�
   const [, numbered] = autoFolderNames("가".repeat(100), "QT-20261104-001");
   assert.ok(numbered.length <= 80 && numbered.endsWith("(QT-20261104-001)"));
 });
+
+test("맥에서 온 한글 이름(NFD)은 NAS가 저장하는 형태(NFC)로 맞춘다", () => {
+  const nfd = "우주의조약돌-ID카드.jpg".normalize("NFD");
+  assert.notEqual(nfd, "우주의조약돌-ID카드.jpg");
+  assert.equal(sanitizeFileName(nfd), "우주의조약돌-ID카드.jpg");
+  assert.equal(sanitizeFolderName("카카오 판교".normalize("NFD")), "카카오 판교");
+  assert.equal(validateProgramFile("시안.png".normalize("NFD"), 10, "디자인"), null);
+});
