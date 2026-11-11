@@ -1,3 +1,8 @@
 {
-  "regions": ["icn1"]
+  "regions": ["sin1"],
+  "functions": {
+    "src/app/api/quotes/*/programs/**/route.ts": {
+      "regions": ["icn1"]
+    }
+  }
 }
