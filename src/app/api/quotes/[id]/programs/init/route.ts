@@ -1,18 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { randomUUID } from "crypto";
-import { prisma } from "@/lib/db";
-import { getAuthUser } from "@/lib/auth";
-import { canAccessQuote } from "@/lib/quoteAccess";
 import { supabase, STORAGE_BUCKET } from "@/lib/supabase";
-import { synologyConfigured } from "@/lib/synology";
-import {
-  PROGRAM_PART_SIZE,
-  PROGRAM_TMP_PREFIX,
-  canUploadProgram,
-  partCount,
-  tmpPartPath,
-  validateProgramFile,
-} from "@/lib/programUpload";
+import { fail, programContext } from "@/lib/programAccess";
+import { PROGRAM_PART_SIZE, PROGRAM_TMP_PREFIX, partCount, tmpPartPath, validateProgramFile } from "@/lib/programUpload";
 
 const STALE_MS = 6 * 60 * 60 * 1000; // 6시간 넘은 임시 조각은 중단된 업로드로 보고 지운다
 
@@ -35,35 +25,21 @@ async function cleanupStale(quoteId: string) {
   }
 }
 
-// 올리기 시작 — 조각별 임시 업로드 주소를 내준다. 개발팀만.
+// 올리기 시작 — 조각별 임시 업로드 주소를 내준다. 개발팀만, 행사 폴더가 연결된 견적만.
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  const user = await getAuthUser();
-  if (!user) return NextResponse.json({ error: "로그인이 필요합니다" }, { status: 401 });
-  if (!canUploadProgram(user.role)) return NextResponse.json({ error: "권한이 없습니다" }, { status: 403 });
-
   const { id } = await params;
-  const quote = await prisma.quote.findUnique({
-    where: { id },
-    select: { isExternal: true, createdById: true, devAssigneeId: true },
-  });
-  if (!quote) return NextResponse.json({ error: "견적을 찾을 수 없습니다" }, { status: 404 });
-  if (!canAccessQuote(user, quote)) return NextResponse.json({ error: "권한이 없습니다" }, { status: 403 });
-
-  if (!synologyConfigured()) {
-    return NextResponse.json(
-      { error: "NAS 연동이 아직 설정되지 않았습니다 (서버 환경변수 SYNOLOGY_URL·USER·PASSWORD)" },
-      { status: 503 },
-    );
-  }
+  const ctx = await programContext(id, { manage: true, nas: true });
+  if (ctx instanceof NextResponse) return ctx;
+  if (!ctx.quote.programFolder) return fail("먼저 NAS 행사 폴더를 연결해 주세요", 409);
 
   const body = (await request.json().catch(() => null)) as { fileName?: unknown; size?: unknown } | null;
   const fileName = typeof body?.fileName === "string" ? body.fileName : "";
   const size = typeof body?.size === "number" ? body.size : NaN;
   const invalid = validateProgramFile(fileName, size);
-  if (invalid) return NextResponse.json({ error: invalid }, { status: 400 });
+  if (invalid) return fail(invalid, 400);
 
   await cleanupStale(id);
 
@@ -75,7 +51,7 @@ export async function POST(
     const { data, error } = await bucket.createSignedUploadUrl(tmpPartPath(id, uploadId, i));
     if (error || !data?.signedUrl) {
       console.error("임시 업로드 주소 생성 실패:", error?.message);
-      return NextResponse.json({ error: "올리기를 시작하지 못했습니다" }, { status: 500 });
+      return fail("올리기를 시작하지 못했습니다", 500);
     }
     parts.push({ index: i, url: data.signedUrl });
   }
