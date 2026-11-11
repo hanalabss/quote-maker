@@ -26,6 +26,9 @@ import {
 } from "@/lib/programUpload";
 
 export const maxDuration = 300;
+// 회사 NAS는 해외 IP를 막는다 (싱가포르에서 연결 시간 초과, 서울에서 정상 — 2026-11-11 실측).
+// 프로젝트 기본 리전은 sin1(DB 옆)이므로 NAS에 닿는 이 API만 서울에서 돌린다.
+export const preferredRegion = "icn1";
 export const dynamic = "force-dynamic";
 
 // 임시 조각을 이어 붙여 NAS로 옮기고, 공유 링크를 만들어 견적에 남긴다.

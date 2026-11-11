@@ -103,7 +103,11 @@ async function call<T>(sid: string | null, params: Record<string, string>): Prom
       signal: AbortSignal.timeout(API_TIMEOUT_MS),
       cache: "no-store",
     });
-  } catch {
+  } catch (e) {
+    // 원인 코드와 실행 리전만 남긴다 (주소·계정·세션은 남기지 않는다).
+    // 회사 NAS는 해외 IP를 막는다 — 서울(icn1)이 아닌 리전에서 돌면 여기서 연결 시간 초과가 난다.
+    const cause = (e as { cause?: { code?: string } })?.cause?.code ?? (e as Error)?.name ?? "unknown";
+    console.error(`NAS 접속 실패: ${cause} (region=${process.env.VERCEL_REGION ?? "local"})`);
     throw new SynologyError("NAS에 접속하지 못했습니다");
   }
   if (!res.ok) throw new SynologyError(`NAS가 오류를 돌려줬습니다 (HTTP ${res.status})`);
