@@ -40,6 +40,11 @@ export function nasBaseDir(): string {
   return (process.env.SYNOLOGY_BASE_DIR || DEFAULT_NAS_BASE_DIR).replace(/\/+$/, "");
 }
 
+/** 행사 폴더의 전체 경로. 폴더명은 sanitizeFolderName 을 거친 한 칸짜리 이름이어야 한다. */
+export function eventFolderPath(folderName: string): string {
+  return `${nasBaseDir()}/${folderName}`;
+}
+
 /** 삭제 같은 위험한 호출 전에 — 경로가 보관 폴더 아래인지 확인한다. */
 export function isUnderBaseDir(path: string): boolean {
   const base = nasBaseDir();
@@ -196,6 +201,48 @@ export async function fileSize(sid: string, fullPath: string): Promise<number | 
   return f.additional?.size ?? 0;
 }
 
+export type NasEntry = { name: string; isDir: boolean; size: number; mtime: number };
+
+/** 폴더 안 목록 (휴지통·썸네일 같은 NAS 내부 폴더는 뺀다). 폴더가 없으면 null. */
+export async function listFolder(sid: string, fullPath: string): Promise<NasEntry[] | null> {
+  const r = await call<{
+    files?: { name: string; isdir?: boolean; additional?: { size?: number; time?: { mtime?: number } } }[];
+  }>(sid, {
+    api: "SYNO.FileStation.List",
+    version: "2",
+    method: "list",
+    folder_path: fullPath,
+    limit: "1000",
+    sort_by: "name",
+    additional: JSON.stringify(["size", "time"]),
+  });
+  if (!r.success) {
+    if (r.error?.code === 408) return null;
+    throw new SynologyError(describe(r.error?.code, FILE_ERRORS, "NAS 폴더를 읽지 못했습니다"), r.error?.code);
+  }
+  return (r.data?.files ?? [])
+    .filter((f) => !f.name.startsWith("#") && !f.name.startsWith("@"))
+    .map((f) => ({
+      name: f.name,
+      isDir: !!f.isdir,
+      size: f.isdir ? 0 : (f.additional?.size ?? 0),
+      mtime: (f.additional?.time?.mtime ?? 0) * 1000,
+    }));
+}
+
+/** 공유 링크가 아직 살아 있는지 (파일이 지워지거나 바뀌면 링크도 죽는다) */
+export async function shareLinkAlive(sid: string, id: string, expectedPath: string): Promise<boolean> {
+  // 실측(2026-11-11): 없는 id 도 success:true 로 오고 data 가 비어 있다. 대상이 지워진 링크는 status:"broken".
+  // 그래서 성공 여부가 아니라 data 의 상태와 경로를 본다.
+  const r = await call<{ id?: string; status?: string; path?: string }>(sid, {
+    api: "SYNO.FileStation.Sharing",
+    version: "3",
+    method: "getinfo",
+    id,
+  });
+  return r.success && r.data?.id === id && r.data.status === "valid" && r.data.path === expectedPath;
+}
+
 function multipartField(boundary: string, name: string, value: string): string {
   return `--${boundary}\r\nContent-Disposition: form-data; name="${name}"\r\n\r\n${value}\r\n`;
 }
@@ -336,6 +383,10 @@ export async function deleteShareLink(sid: string, id: string): Promise<void> {
 /** 파일 하나를 지운다 (NAS 휴지통이 켜져 있으면 #recycle 로 간다). 보관 폴더 밖은 거부한다. */
 export async function deleteFile(sid: string, fullPath: string): Promise<void> {
   if (!isUnderBaseDir(fullPath)) throw new SynologyError("보관 폴더 밖의 파일은 지울 수 없습니다");
+  // 행사 폴더 자체(바로 아래 한 칸)는 지우지 않는다 — 폴더 안의 파일 하나만 지울 수 있다
+  if (fullPath.slice(nasBaseDir().length + 1).split("/").filter(Boolean).length !== 2) {
+    throw new SynologyError("행사 폴더 안의 파일만 지울 수 있습니다");
+  }
   await fileCall(
     sid,
     { api: "SYNO.FileStation.Delete", version: "2", method: "delete", path: JSON.stringify([fullPath]) },

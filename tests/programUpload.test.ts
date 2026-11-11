@@ -8,7 +8,9 @@ import {
   formatBytes,
   isUploadId,
   partCount,
+  rankFolders,
   sanitizeFileName,
+  sanitizeFolderName,
   timestampedName,
   tmpDir,
   tmpPartPath,
@@ -78,4 +80,30 @@ test("크기 표시", () => {
   assert.equal(formatBytes(512), "0.5KB");
   assert.equal(formatBytes(88 * 1024 * 1024), "88.0MB");
   assert.equal(formatBytes(1.5 * 1024 * 1024 * 1024), "1.50GB");
+});
+
+test("행사 폴더명: 한 칸짜리 이름만 — 경로·NAS 내부 이름은 거부", () => {
+  assert.equal(sanitizeFolderName("NHR 기아(2026)"), "NHR 기아(2026)");
+  assert.equal(sanitizeFolderName("  카카오   판교 포토카드. "), "카카오 판교 포토카드");
+  assert.equal(sanitizeFolderName('a<b>:"c"'), "a b c");
+  assert.equal(sanitizeFolderName("../[SK]에디터"), "");
+  assert.equal(sanitizeFolderName("a/b"), "");
+  assert.equal(sanitizeFolderName("a" + String.fromCharCode(92) + "b"), "");
+  assert.equal(sanitizeFolderName(".."), "");
+  assert.equal(sanitizeFolderName("#recycle"), "");
+  assert.equal(sanitizeFolderName("@eaDir"), "");
+  assert.equal(sanitizeFolderName("   "), "");
+});
+
+test("폴더 추천: 행사명과 닮은 폴더가 앞에, 안 닮은 것은 추천 표시 없음", () => {
+  const folders = ["AIA", "HMC(태안)", "NHR 기아(2026)", "모꼬지(고고다이노)", "삼성바이오에피스 패밀리데이(2026)", "새별프렌즈"];
+  const r1 = rankFolders("NHR(기아) 포토카드 키오스크", folders);
+  assert.equal(r1[0].name, "NHR 기아(2026)");
+  assert.equal(r1[0].suggested, true);
+  const r2 = rankFolders("HMC 카드발급 키오스크 (태안)", folders);
+  assert.equal(r2[0].name, "HMC(태안)");
+  const r3 = rankFolders("카카오 판교 포토카드", folders);
+  assert.equal(r3.some((f) => f.suggested), false, "닮은 폴더가 없으면 아무것도 추천하지 않는다");
+  assert.equal(r3.length, folders.length);
+  assert.deepEqual(rankFolders("", ["b", "a"]).map((f) => f.name), ["a", "b"]);
 });

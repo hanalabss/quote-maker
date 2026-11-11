@@ -29,6 +29,25 @@ before(async () => {
       if (isUpload) reply = uploadReply;
       else if (form?.get("api") === "SYNO.API.Auth" && form.get("method") === "login") {
         reply = form.get("passwd") === "right" ? { success: true, data: { sid: "SID123" } } : { success: false, error: { code: 400 } };
+      } else if (form?.get("api") === "SYNO.FileStation.List" && form.get("method") === "list") {
+        reply = (form.get("folder_path") ?? "").endsWith("없는 폴더")
+          ? { success: false, error: { code: 408 } }
+          : {
+              success: true,
+              data: {
+                files: [
+                  { name: "#recycle", isdir: true, additional: { time: { mtime: 1 } } },
+                  { name: "Setup.zip", isdir: false, additional: { size: 1000, time: { mtime: 1700000000 } } },
+                  { name: "하위", isdir: true, additional: { size: 4096, time: { mtime: 1700000001 } } },
+                ],
+              },
+            };
+      } else if (form?.get("api") === "SYNO.FileStation.Sharing" && form.get("method") === "getinfo") {
+        const sid = form.get("id");
+        reply =
+          sid === "none"
+            ? { success: true }
+            : { success: true, data: { id: sid, status: sid === "dead" ? "broken" : "valid", path: "/p/a.zip" } };
       } else if (form?.get("api") === "SYNO.FileStation.List") {
         const path = JSON.parse(form.get("path") ?? "[]")[0] as string;
         reply = path.endsWith("없음.zip")
@@ -80,7 +99,7 @@ test("올리기: 조각을 이어 붙인 본문이 원본과 같고 Content-Leng
   uploadReply = { success: true };
 
   await s.uploadFile("SID123", {
-    folder: "/개발팀/완료 프로그램/QT-20261104-001",
+    folder: "/공유폴더/①프로그램 개발/개발팀/[행사 자료]/카카오 판교",
     fileName: "카카오 설치 묶음.zip",
     size: original.length,
     chunks: (async function* () {
@@ -103,7 +122,7 @@ test("올리기: 조각을 이어 붙인 본문이 원본과 같고 Content-Leng
   assert.equal(createHash("sha256").update(fileBytes).digest("hex"), createHash("sha256").update(original).digest("hex"));
 
   const head = req.body.subarray(0, headEnd).toString("utf8");
-  assert.match(head, /name="path"\r\n\r\n\/개발팀\/완료 프로그램\/QT-20261104-001\r\n/);
+  assert.match(head, /name="path"\r\n\r\n\/공유폴더\/①프로그램 개발\/개발팀\/\[행사 자료\]\/카카오 판교\r\n/);
   assert.match(head, /name="overwrite"\r\n\r\nfalse\r\n/);
   assert.match(head, /filename="카카오 설치 묶음\.zip"/);
   assert.ok(head.indexOf('name="path"') < head.indexOf('name="file"'), "file 필드는 맨 마지막");
@@ -114,7 +133,7 @@ test("올리기: 조각 합계가 size와 다르면 실패한다", async () => {
   const s = await lib();
   await assert.rejects(
     s.uploadFile("SID123", {
-      folder: "/개발팀/완료 프로그램/Q",
+      folder: "/공유폴더/①프로그램 개발/개발팀/[행사 자료]/Q",
       fileName: "a.zip",
       size: 100,
       chunks: (async function* () {
@@ -130,7 +149,7 @@ test("올리기: NAS 오류 코드는 한글 문구로 (같은 이름 존재 = 1
   uploadReply = { success: false, error: { code: 1805 } };
   await assert.rejects(
     s.uploadFile("SID123", {
-      folder: "/개발팀/완료 프로그램/Q",
+      folder: "/공유폴더/①프로그램 개발/개발팀/[행사 자료]/Q",
       fileName: "a.zip",
       size: 3,
       chunks: (async function* () {
@@ -144,29 +163,54 @@ test("올리기: NAS 오류 코드는 한글 문구로 (같은 이름 존재 = 1
 
 test("파일 크기 조회: 없으면 null", async () => {
   const s = await lib();
-  assert.equal(await s.fileSize("SID123", "/개발팀/완료 프로그램/Q/있음.zip"), 4321);
-  assert.equal(await s.fileSize("SID123", "/개발팀/완료 프로그램/Q/없음.zip"), null);
+  assert.equal(await s.fileSize("SID123", "/공유폴더/①프로그램 개발/개발팀/[행사 자료]/Q/있음.zip"), 4321);
+  assert.equal(await s.fileSize("SID123", "/공유폴더/①프로그램 개발/개발팀/[행사 자료]/Q/없음.zip"), null);
 });
 
 test("공유 링크 만들기", async () => {
   const s = await lib();
-  assert.deepEqual(await s.createShareLink("SID123", "/개발팀/완료 프로그램/Q/a.zip"), {
+  assert.deepEqual(await s.createShareLink("SID123", "/공유폴더/①프로그램 개발/개발팀/[행사 자료]/Q/a.zip"), {
     id: "abc",
     url: "https://nas.example/sharing/abc",
   });
 });
 
-test("삭제는 보관 폴더 아래만 — 밖은 NAS에 요청조차 보내지 않는다", async () => {
+test("삭제는 행사 폴더 안의 파일만 — 그 밖은 NAS에 요청조차 보내지 않는다", async () => {
   const s = await lib();
-  assert.equal(s.isUnderBaseDir("/개발팀/완료 프로그램/QT-1/a.zip"), true);
-  assert.equal(s.isUnderBaseDir("/개발팀/프린터 드라이버/a.zip"), false);
-  assert.equal(s.isUnderBaseDir("/개발팀/완료 프로그램/../프린터 드라이버/a.zip"), false);
-  assert.equal(s.isUnderBaseDir("/개발팀/완료 프로그램"), false);
+  const B = "/공유폴더/①프로그램 개발/개발팀/[행사 자료]";
+  assert.equal(s.nasBaseDir(), B);
+  assert.equal(s.eventFolderPath("NHR 기아(2026)"), B + "/NHR 기아(2026)");
+  assert.equal(s.isUnderBaseDir(B + "/NHR 기아(2026)/a.zip"), true);
+  assert.equal(s.isUnderBaseDir("/공유폴더/①프로그램 개발/개발팀/[SK]에디터/a.zip"), false);
+  assert.equal(s.isUnderBaseDir(B + "/../[SK]에디터/a.zip"), false);
+  assert.equal(s.isUnderBaseDir(B), false);
 
   const before = seen.length;
   await assert.rejects(s.deleteFile("SID123", "/개발팀/인하대 식수관리 프로젝트/x.zip"), /보관 폴더 밖/);
+  // 행사 폴더 자체, 하위 폴더 안쪽은 지울 수 없다
+  await assert.rejects(s.deleteFile("SID123", B + "/NHR 기아(2026)"), /행사 폴더 안의 파일만/);
+  await assert.rejects(s.deleteFile("SID123", B + "/NHR 기아(2026)/sub/a.zip"), /행사 폴더 안의 파일만/);
   assert.equal(seen.length, before);
 
-  await s.deleteFile("SID123", "/개발팀/완료 프로그램/QT-1/a.zip");
+  await s.deleteFile("SID123", B + "/NHR 기아(2026)/a.zip");
   assert.equal(seen.length, before + 1);
+});
+
+test("폴더 목록: NAS 내부 폴더(#recycle 등)는 빼고, 없는 폴더는 null", async () => {
+  const s = await lib();
+  const B = "/공유폴더/①프로그램 개발/개발팀/[행사 자료]";
+  const list = await s.listFolder("SID123", B + "/있는 폴더");
+  assert.deepEqual(list, [
+    { name: "Setup.zip", isDir: false, size: 1000, mtime: 1700000000000 },
+    { name: "하위", isDir: true, size: 0, mtime: 1700000001000 },
+  ]);
+  assert.equal(await s.listFolder("SID123", B + "/없는 폴더"), null);
+});
+
+test("공유 링크 생존 확인 — 없는 id·끊긴 링크·다른 경로는 죽은 것으로 본다", async () => {
+  const s = await lib();
+  assert.equal(await s.shareLinkAlive("SID123", "abc", "/p/a.zip"), true);
+  assert.equal(await s.shareLinkAlive("SID123", "dead", "/p/a.zip"), false);
+  assert.equal(await s.shareLinkAlive("SID123", "none", "/p/a.zip"), false, "NAS는 없는 id 에도 success:true 를 준다");
+  assert.equal(await s.shareLinkAlive("SID123", "abc", "/p/other.zip"), false);
 });

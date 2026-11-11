@@ -8,7 +8,9 @@ export const PROGRAM_PART_SIZE = 8 * 1024 * 1024; // 조각 크기 8MB
 export const PROGRAM_MAX_SIZE = 500 * 1024 * 1024; // 파일 하나 500MB
 export const PROGRAM_EXTENSIONS = [".zip", ".7z", ".rar", ".exe", ".msi", ".apk"];
 export const PROGRAM_TMP_PREFIX = "program-tmp";
-export const DEFAULT_NAS_BASE_DIR = "/개발팀/완료 프로그램";
+// 보관 위치: NAS [행사 자료] 아래 행사 폴더 — 견적마다 행사 폴더 하나를 연결한다.
+// 목록의 기준은 NAS 폴더의 실제 내용이다 (NAS에 직접 넣은 파일도 웹에 보인다).
+export const DEFAULT_NAS_BASE_DIR = "/공유폴더/①프로그램 개발/개발팀/[행사 자료]";
 
 /** 올릴 수 있는 사람: 개발팀 전체. 담당자(dev_staff)는 견적 접근 범위(담당 견적)가 따로 걸린다. */
 export function canUploadProgram(role: string | null | undefined): boolean {
@@ -76,6 +78,58 @@ export function timestampedName(name: string, now: Date = new Date()): string {
   }).formatToParts(now);
   const g = (t: string) => p.find((x) => x.type === t)?.value ?? "00";
   return `${g("year")}${g("month")}${g("day")}-${g("hour")}${g("minute")}_${name}`;
+}
+
+/** 행사 폴더명 정리 — 경로 한 칸짜리 이름만 허용한다. 쓸 수 없으면 빈 문자열. */
+export function sanitizeFolderName(name: string): string {
+  if (name.includes("/") || name.includes("\\")) return "";
+  const cleaned = name
+    .replace(/[<>:"|?*\u0000-\u001f]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .replace(/[. ]+$/, "");
+  if (!cleaned || cleaned === "." || cleaned === ".." || cleaned.startsWith("#") || cleaned.startsWith("@")) return "";
+  return cleaned.slice(0, 80);
+}
+
+// 비교용: 괄호 안·기호와 흔한 꼬리말을 뺀다
+function folderKey(v: string): string {
+  return v
+    .toLowerCase()
+    .replace(/\(.*?\)|\[.*?\]/g, " ")
+    .replace(/행사|키오스크|프로그램|포토카드|카드발급|팝업스토어|팝업|20\d\d/g, " ")
+    .replace(/[^0-9a-z가-힣]+/g, "");
+}
+
+function longestCommon(a: string, b: string): number {
+  let best = 0;
+  const prev = new Array<number>(b.length + 1).fill(0);
+  for (let i = 1; i <= a.length; i++) {
+    let diag = 0;
+    for (let j = 1; j <= b.length; j++) {
+      const keep = prev[j];
+      prev[j] = a[i - 1] === b[j - 1] ? diag + 1 : 0;
+      if (prev[j] > best) best = prev[j];
+      diag = keep;
+    }
+  }
+  return best;
+}
+
+/**
+ * 견적 행사명과 닮은 기존 폴더를 앞에 놓는다. 닮은 것(겹치는 글자 2자 이상)에는 suggested 표시.
+ * 자동으로 연결하지는 않는다 — 고르는 것은 사람이다.
+ */
+export function rankFolders(eventName: string, folders: string[]): { name: string; suggested: boolean }[] {
+  const key = folderKey(eventName);
+  return folders
+    .map((name) => {
+      const score = key ? longestCommon(key, folderKey(name)) : 0;
+      return { name, score: score >= 2 ? score : 0 }; // 한 글자 겹침은 닮은 것으로 치지 않는다
+    })
+    // 닮은 폴더만 앞으로, 나머지는 이름순 그대로 (찾기 쉽게)
+    .sort((a, b) => b.score - a.score || a.name.localeCompare(b.name, "ko"))
+    .map(({ name, score }) => ({ name, suggested: score > 0 }));
 }
 
 export function formatBytes(n: number): string {

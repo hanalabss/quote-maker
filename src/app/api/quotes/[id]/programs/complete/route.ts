@@ -1,23 +1,20 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { getAuthUser } from "@/lib/auth";
-import { canAccessQuote } from "@/lib/quoteAccess";
 import { supabase, STORAGE_BUCKET } from "@/lib/supabase";
+import { fail, programContext } from "@/lib/programAccess";
 import {
   SynologyError,
   createShareLink,
   deleteFile,
   deleteShareLink,
-  ensureFolder,
+  eventFolderPath,
   fileSize,
+  listFolder,
   login,
   logout,
-  nasBaseDir,
-  synologyConfigured,
   uploadFile,
 } from "@/lib/synology";
 import {
-  canUploadProgram,
   isUploadId,
   sanitizeFileName,
   timestampedName,
@@ -25,33 +22,24 @@ import {
   validateProgramFile,
 } from "@/lib/programUpload";
 
+// 회사 NAS는 해외 IP를 막는다 (Vercel sin1 에서 연결 시간 초과, icn1 에서 정상 — 2026-11-11 실측).
+// 그래서 프로젝트 함수 리전을 서울(vercel.json regions=icn1)로 둔다. 라우트별 preferredRegion 은 적용되지 않았다.
 export const maxDuration = 300;
-// 회사 NAS는 해외 IP를 막는다 (싱가포르에서 연결 시간 초과, 서울에서 정상 — 2026-11-11 실측).
-// 프로젝트 기본 리전은 sin1(DB 옆)이므로 NAS에 닿는 이 API만 서울에서 돌린다.
-export const preferredRegion = "icn1";
 export const dynamic = "force-dynamic";
 
-// 임시 조각을 이어 붙여 NAS로 옮기고, 공유 링크를 만들어 견적에 남긴다.
+// 임시 조각을 이어 붙여 연결된 NAS 행사 폴더로 옮기고, 받기 링크를 만들어 기록한다.
 // 오래 걸리므로 진행 상황을 한 줄에 JSON 하나씩(NDJSON) 흘려보낸다:
 //   {stage:"nas", sent, total} … {stage:"verify"} {stage:"share"} {done:true, program} | {error}
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  const user = await getAuthUser();
-  if (!user) return NextResponse.json({ error: "로그인이 필요합니다" }, { status: 401 });
-  if (!canUploadProgram(user.role)) return NextResponse.json({ error: "권한이 없습니다" }, { status: 403 });
-
   const { id } = await params;
-  const quote = await prisma.quote.findUnique({
-    where: { id },
-    select: { quoteNumber: true, isExternal: true, createdById: true, devAssigneeId: true },
-  });
-  if (!quote) return NextResponse.json({ error: "견적을 찾을 수 없습니다" }, { status: 404 });
-  if (!canAccessQuote(user, quote)) return NextResponse.json({ error: "권한이 없습니다" }, { status: 403 });
-  if (!synologyConfigured()) {
-    return NextResponse.json({ error: "NAS 연동이 아직 설정되지 않았습니다" }, { status: 503 });
-  }
+  const ctx = await programContext(id, { manage: true, nas: true });
+  if (ctx instanceof NextResponse) return ctx;
+  const { user, quote } = ctx;
+  if (!quote.programFolder) return fail("먼저 NAS 행사 폴더를 연결해 주세요", 409);
+  const folder = eventFolderPath(quote.programFolder);
 
   const body = (await request.json().catch(() => null)) as {
     uploadId?: unknown;
@@ -117,8 +105,10 @@ export async function POST(
         send({ stage: "login" });
         sid = await login();
 
-        const folder = `${nasBaseDir()}/${quote.quoteNumber}`;
-        await ensureFolder(sid, folder);
+        // 연결된 폴더가 NAS에서 없어졌으면 새로 만들지 않고 멈춘다 (이름이 바뀐 것일 수 있다)
+        if ((await listFolder(sid, folder)) === null) {
+          throw new SynologyError("NAS에서 행사 폴더를 찾을 수 없습니다. 폴더를 다시 연결해 주세요");
+        }
 
         // 같은 이름이 있으면 덮어쓰지 않고 시각을 붙인 이름으로 올린다
         let storedName = fileName;
