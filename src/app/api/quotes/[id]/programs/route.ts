@@ -19,6 +19,8 @@ export async function GET(
     canManage: canUploadProgram(user.role),
     configured: synologyConfigured(),
     baseDir: nasBaseDir(),
+    // 이 API가 실제로 돈 리전 — NAS는 해외 IP를 막으므로 icn1 이어야 한다 (배포 후 확인용)
+    region: process.env.VERCEL_REGION ?? "local",
     eventName: quote.eventName,
     folder: quote.programFolder,
     folderMissing: false,

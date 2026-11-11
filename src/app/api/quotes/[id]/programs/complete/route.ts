@@ -23,7 +23,8 @@ import {
 } from "@/lib/programUpload";
 
 // 회사 NAS는 해외 IP를 막는다 (Vercel sin1 에서 연결 시간 초과, icn1 에서 정상 — 2026-11-11 실측).
-// 그래서 프로젝트 함수 리전을 서울(vercel.json regions=icn1)로 둔다. 라우트별 preferredRegion 은 적용되지 않았다.
+// 프로젝트 전체를 icn1 로 옮기면 DB(싱가포르)와 멀어져 모든 화면이 느려진다(상세 API 170ms → 1.5초 실측).
+// 그래서 programs 아래 API만 vercel.json functions.regions 로 서울에서 돌린다. 라우트의 preferredRegion export 는 적용되지 않았다.
 export const maxDuration = 300;
 export const dynamic = "force-dynamic";
 
