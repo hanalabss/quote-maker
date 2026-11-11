@@ -111,8 +111,33 @@ async function putPartWithRetry(url: string, blob: Blob, onProgress: (loaded: nu
   throw lastError;
 }
 
-const fmtDate = (ms: number) =>
-  ms ? new Date(ms).toLocaleDateString("ko-KR", { year: "numeric", month: "numeric", day: "numeric" }) : "";
+// 올해 것은 월·일만, 지난 해 것은 연도까지
+const fmtDate = (ms: number) => {
+  if (!ms) return "";
+  const d = new Date(ms);
+  const sameYear = d.getFullYear() === new Date().getFullYear();
+  return d.toLocaleDateString("ko-KR", sameYear ? { month: "numeric", day: "numeric" } : { year: "numeric", month: "numeric", day: "numeric" });
+};
+
+// 긴 이름을 잘라 내지 않고 끝까지 보여 준다. 줄은 구분 문자(_ - . 공백 괄호) 뒤에서 먼저 바뀌고,
+// 구분 문자가 없는 긴 덩어리만 글자 단위로 바뀐다. 파일이면 확장자를 옅게 해 종류가 먼저 읽히게 한다.
+function BreakableName({ name, file = false }: { name: string; file?: boolean }) {
+  const dot = file ? name.lastIndexOf(".") : -1;
+  const stem = dot > 0 ? name.slice(0, dot) : name;
+  const ext = dot > 0 ? name.slice(dot) : "";
+  const parts = stem.split(/(?<=[_\-. )\]])/);
+  return (
+    <span className="[overflow-wrap:anywhere]">
+      {parts.map((p, i) => (
+        <span key={i}>
+          {p}
+          {i < parts.length - 1 && <wbr />}
+        </span>
+      ))}
+      {ext && <span className="text-gray-500">{ext}</span>}
+    </span>
+  );
+}
 
 export function QuotePrograms({ quoteId }: { quoteId: string }) {
   const api = `/api/quotes/${quoteId}/programs`;
@@ -476,10 +501,10 @@ export function QuotePrograms({ quoteId }: { quoteId: string }) {
               <div className="flex-1 min-w-0 px-3 py-2" title={folder ? fullPath : undefined}>
                 <div className="text-[11px] text-gray-500 truncate">NAS › {crumbs.slice(-2).join(" › ")}</div>
                 {folder ? (
-                  <div className="flex items-center gap-1.5 text-sm font-medium text-gray-900">
-                    <Folder className="w-4 h-4 text-blue-600 shrink-0" />
-                    <span className="truncate">{folder}</span>
-                    {current && <span className="font-normal text-gray-500 shrink-0">› {current}</span>}
+                  // 폴더명은 자르지 않는다 — 길면 다음 줄로 넘긴다. 하위 폴더는 바로 아래 탭이 알려 준다.
+                  <div className="flex items-start gap-1.5 text-sm font-medium text-gray-900 leading-snug mt-0.5">
+                    <Folder className="w-4 h-4 text-blue-600 shrink-0 mt-px" />
+                    <BreakableName name={folder} />
                   </div>
                 ) : (
                   <div className="text-sm text-gray-600">행사 폴더가 아직 없습니다</div>
@@ -536,21 +561,28 @@ export function QuotePrograms({ quoteId }: { quoteId: string }) {
                   {files.map((f) => {
                     const Icon = f.isDir ? Folder : !current ? Package : IMAGE_EXT.includes(fileExtension(f.name)) ? ImageIcon : FileText;
                     return (
-                      <li key={(f.isDir ? "d:" : "f:") + f.name} className="flex items-center gap-2 px-3 py-2.5">
-                        <Icon className={`w-4 h-4 shrink-0 ${f.isDir ? "text-gray-400" : "text-gray-500"}`} />
+                      // 이름이 줄 전체 폭을 쓴다. 크기·날짜·올린 사람은 아랫줄로, 받기·지우기는 그 줄 오른쪽에 둔다.
+                      <li key={(f.isDir ? "d:" : "f:") + f.name} className="flex gap-2 px-3 py-2.5">
+                        <Icon className={`w-4 h-4 shrink-0 mt-0.5 ${f.isDir ? "text-gray-400" : "text-gray-500"}`} />
                         <div className="flex-1 min-w-0">
-                          <div className="text-sm text-gray-900 break-all leading-snug">
-                            {f.name}
+                          <div className="text-sm text-gray-900 leading-snug" title={f.name}>
+                            <BreakableName name={f.name} file={!f.isDir} />
                             {f.version && <span className="ml-1.5 text-xs text-blue-700 whitespace-nowrap">{f.version}</span>}
                           </div>
-                          <div className="text-xs text-gray-500">
-                            {f.isDir ? "하위 폴더 (폴더 열기에서 확인)" : `${fmtDate(f.mtime)} ${f.uploadedBy ? `${f.uploadedBy} 올림` : "NAS에 직접 넣음"}`}
-                          </div>
-                          {f.note && <div className="text-xs text-gray-600 break-words mt-0.5">{f.note}</div>}
-                        </div>
+                          <div className="flex items-center gap-1 mt-0.5 min-h-7">
+                            <div className="flex-1 min-w-0 flex flex-wrap items-baseline gap-x-2 text-xs text-gray-500">
+                              {f.isDir ? (
+                                <span>하위 폴더 (폴더 열기에서 확인)</span>
+                              ) : (
+                                <>
+                                  <span className="tabular-nums text-gray-700">{formatBytes(f.size)}</span>
+                                  <span className="tabular-nums">{fmtDate(f.mtime)}</span>
+                                  <span>{f.uploadedBy ? `${f.uploadedBy} 올림` : "NAS에 직접 넣음"}</span>
+                                </>
+                              )}
+                            </div>
                         {!f.isDir && (
                           <>
-                            <span className="text-xs text-gray-500 tabular-nums shrink-0">{formatBytes(f.size)}</span>
                             <a
                               href={fileHref(f.name)}
                               target="_blank"
@@ -574,6 +606,9 @@ export function QuotePrograms({ quoteId }: { quoteId: string }) {
                             )}
                           </>
                         )}
+                          </div>
+                          {f.note && <div className="text-xs text-gray-600 [overflow-wrap:anywhere]">{f.note}</div>}
+                        </div>
                       </li>
                     );
                   })}
@@ -644,7 +679,9 @@ export function QuotePrograms({ quoteId }: { quoteId: string }) {
                       return (
                         <li key={f.name + i} className="flex items-center gap-1.5 text-xs text-gray-700">
                           {sentAlready ? <Check className="w-3.5 h-3.5 text-blue-600 shrink-0" /> : <span className="w-3.5 shrink-0" />}
-                          <span className="flex-1 min-w-0 break-all">{f.name}</span>
+                          <span className="flex-1 min-w-0 leading-snug">
+                            <BreakableName name={f.name} file />
+                          </span>
                           <span className="text-gray-500 tabular-nums shrink-0">{formatBytes(f.size)}</span>
                         </li>
                       );

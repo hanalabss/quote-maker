@@ -970,7 +970,7 @@ export default function QuoteDetailPage({
                       <FileText className="w-4 h-4 text-gray-500" />
                     )}
                     <div className="flex-1 min-w-0">
-                      <div className="text-sm truncate group-hover:text-blue-600">
+                      <div className="text-sm leading-snug [overflow-wrap:anywhere] group-hover:text-blue-600">
                         {file.originalName}
                       </div>
                       <div className="text-xs text-gray-400">
