@@ -64,7 +64,9 @@ export function partCount(size: number, partSize: number = PROGRAM_PART_SIZE): n
 
 /** NAS·윈도우에서 못 쓰는 문자를 걸러낸 파일명. 경로 조각은 버린다. */
 export function sanitizeFileName(name: string): string {
-  const base = name.split(/[\\/]/).pop() ?? "";
+  // 맥에서 온 한글 파일명은 자모가 풀린 형태(NFD)다. NAS는 합친 형태(NFC)로 저장하므로 미리 맞춘다 —
+  // 안 맞추면 올린 뒤 같은 경로로 크기를 확인하지 못해 올리기가 실패한다 (2026-11-11 첨부 이전 때 실제로 발생).
+  const base = name.normalize("NFC").split(/[\\/]/).pop() ?? "";
   const cleaned = base
     .replace(/[<>:"|?*\u0000-\u001f]/g, "_")
     .replace(/\s+/g, " ")
@@ -129,6 +131,7 @@ export function timestampedName(name: string, now: Date = new Date()): string {
 export function sanitizeFolderName(name: string): string {
   if (name.includes("/") || name.includes("\\")) return "";
   const cleaned = name
+    .normalize("NFC")
     .replace(/[<>:"|?*\u0000-\u001f]/g, " ")
     .replace(/\s+/g, " ")
     .trim()
