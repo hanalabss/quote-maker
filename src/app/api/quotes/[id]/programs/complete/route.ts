@@ -64,7 +64,7 @@ export async function POST(
   const note = typeof body?.note === "string" ? body.note.trim().slice(0, 300) || null : null;
 
   if (!isUploadId(uploadId)) return NextResponse.json({ error: "잘못된 요청입니다" }, { status: 400 });
-  const invalid = validateProgramFile(rawName, size, dir);
+  const invalid = validateProgramFile(rawName, size);
   if (invalid) return NextResponse.json({ error: invalid }, { status: 400 });
   const fileName = sanitizeFileName(rawName);
 

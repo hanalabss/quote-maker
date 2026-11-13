@@ -6,7 +6,6 @@
 
 export const PROGRAM_PART_SIZE = 8 * 1024 * 1024; // 조각 크기 8MB
 export const PROGRAM_MAX_SIZE = 500 * 1024 * 1024; // 파일 하나 500MB
-export const PROGRAM_EXTENSIONS = [".zip", ".7z", ".rar", ".exe", ".msi", ".apk"];
 export const PROGRAM_TMP_PREFIX = "program-tmp";
 // 보관 위치: NAS [행사 자료] 아래 행사 폴더 — 견적마다 행사 폴더 하나를 연결한다.
 // 목록의 기준은 NAS 폴더의 실제 내용이다 (NAS에 직접 넣은 파일도 웹에 보인다).
@@ -23,18 +22,6 @@ export function canUploadProgram(role: string | null | undefined): boolean {
 export const MATERIAL_FOLDERS = ["디자인", "기타 자료"] as const;
 export type MaterialFolder = (typeof MATERIAL_FOLDERS)[number];
 export type UploadDir = "" | MaterialFolder;
-
-export const MATERIAL_EXTENSIONS = [
-  // 이미지·시안 원본
-  ".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp", ".tif", ".tiff", ".svg", ".heic",
-  ".ai", ".psd", ".eps", ".indd", ".pdf", ".fig", ".sketch", ".xd",
-  // 문서
-  ".doc", ".docx", ".xls", ".xlsx", ".ppt", ".pptx", ".hwp", ".hwpx", ".txt", ".csv",
-  // 영상·소리·글꼴
-  ".mp4", ".mov", ".avi", ".wmv", ".mp3", ".wav", ".m4a", ".ttf", ".otf",
-  // 묶음
-  ".zip", ".7z", ".rar",
-];
 
 /** 요청에 실려 온 하위 폴더 값. 없거나 빈 값 = 행사 폴더 바로 아래. 목록에 없는 이름은 null. */
 export function parseUploadDir(v: unknown): UploadDir | null {
@@ -81,17 +68,14 @@ export function fileExtension(name: string): string {
   return i <= 0 ? "" : name.slice(i).toLowerCase();
 }
 
-/** 올리기 전 검사. 문제가 없으면 null, 있으면 사용자에게 보여 줄 문구. dir 이 있으면 행사 자료 규칙으로 본다. */
-export function validateProgramFile(name: string, size: number, dir: UploadDir = ""): string | null {
+/**
+ * 올리기 전 검사. 문제가 없으면 null, 있으면 사용자에게 보여 줄 문구.
+ * 확장자는 가리지 않는다 — 완료 프로그램·디자인·기타 자료 어느 칸이든 모든 형식을 받는다(확장자 없는 파일 포함).
+ * 올리는 사람은 로그인한 개발팀·해당 견적의 사업팀뿐이고, 파일은 NAS에 보관만 한다(서버에서 실행하지 않는다).
+ */
+export function validateProgramFile(name: string, size: number): string | null {
   const safe = sanitizeFileName(name);
   if (!safe) return "파일명이 올바르지 않습니다";
-  if (dir) {
-    if (!MATERIAL_EXTENSIONS.includes(fileExtension(safe))) {
-      return "이 형식은 올릴 수 없습니다. 이미지·시안 원본(ai, psd, pdf)·문서·영상·zip 을 올릴 수 있습니다";
-    }
-  } else if (!PROGRAM_EXTENSIONS.includes(fileExtension(safe))) {
-    return `올릴 수 있는 형식: ${PROGRAM_EXTENSIONS.join(", ")}`;
-  }
   if (!Number.isInteger(size) || size <= 0) return "빈 파일은 올릴 수 없습니다";
   if (size > PROGRAM_MAX_SIZE) {
     return `파일 크기가 ${Math.round(PROGRAM_MAX_SIZE / 1024 / 1024)}MB를 넘습니다`;
