@@ -51,7 +51,7 @@ export async function POST(
 
   const fileName = typeof body?.fileName === "string" ? body.fileName : "";
   const size = typeof body?.size === "number" ? body.size : NaN;
-  const invalid = validateProgramFile(fileName, size, dir);
+  const invalid = validateProgramFile(fileName, size);
   if (invalid) return fail(invalid, 400);
 
   let folderCreated = false;

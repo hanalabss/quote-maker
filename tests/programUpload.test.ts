@@ -53,7 +53,6 @@ test("확장자", () => {
 test("올리기 전 검사", () => {
   assert.equal(validateProgramFile("kiosk-v1.zip", 88 * 1024 * 1024), null);
   assert.equal(validateProgramFile("setup.msi", 1), null);
-  assert.match(validateProgramFile("시안.png", 100) ?? "", /형식/);
   assert.match(validateProgramFile("a.zip", 0) ?? "", /빈 파일/);
   assert.match(validateProgramFile("a.zip", 1.5) ?? "", /빈 파일/);
   assert.match(validateProgramFile("a.zip", PROGRAM_MAX_SIZE + 1) ?? "", /500MB/);
@@ -126,16 +125,14 @@ test("자료 폴더: 정해진 이름만 — 빈 값은 행사 폴더 바로 아
   assert.equal(parseUploadDir(["디자인"]), null);
 });
 
-test("자료 올리기 전 검사: 시안·문서는 되고 실행 파일은 안 된다", () => {
-  assert.equal(validateProgramFile("시안_최종.ai", 120 * 1024 * 1024, "디자인"), null);
-  assert.equal(validateProgramFile("배경.PNG", 100, "디자인"), null);
-  assert.equal(validateProgramFile("문구.xlsx", 100, "기타 자료"), null);
-  assert.equal(validateProgramFile("묶음.zip", 100, "기타 자료"), null);
-  assert.match(validateProgramFile("setup.exe", 100, "디자인") ?? "", /올릴 수 없습니다/);
-  assert.match(validateProgramFile("run.bat", 100, "기타 자료") ?? "", /올릴 수 없습니다/);
-  assert.match(validateProgramFile("시안.png", PROGRAM_MAX_SIZE + 1, "디자인") ?? "", /500MB/);
-  // 완료 프로그램 자리(dir 없음)의 규칙은 그대로
-  assert.match(validateProgramFile("시안.png", 100, "") ?? "", /형식/);
+test("올리기 전 검사: 확장자는 가리지 않는다 (완성품·디자인·기타 자료 공통)", () => {
+  for (const name of ["시안_최종.ai", "배경.PNG", "문구.xlsx", "묶음.zip", "setup.exe", "run.bat", "algo.py", "data.json", "영상.mkv", "README"]) {
+    assert.equal(validateProgramFile(name, 100), null, name);
+  }
+  // 크기·파일명 검사는 그대로
+  assert.match(validateProgramFile("시안.png", PROGRAM_MAX_SIZE + 1) ?? "", /500MB/);
+  assert.match(validateProgramFile("시안.png", 0) ?? "", /빈 파일/);
+  assert.match(validateProgramFile("///", 100) ?? "", /파일명/);
 });
 
 test("자료 권한: 반려·미진행은 닫힘, 지우기는 올린 본인과 개발팀", () => {
@@ -168,5 +165,5 @@ test("맥에서 온 한글 이름(NFD)은 NAS가 저장하는 형태(NFC)로 맞
   assert.notEqual(nfd, "우주의조약돌-ID카드.jpg");
   assert.equal(sanitizeFileName(nfd), "우주의조약돌-ID카드.jpg");
   assert.equal(sanitizeFolderName("카카오 판교".normalize("NFD")), "카카오 판교");
-  assert.equal(validateProgramFile("시안.png".normalize("NFD"), 10, "디자인"), null);
+  assert.equal(validateProgramFile("시안.png".normalize("NFD"), 10), null);
 });

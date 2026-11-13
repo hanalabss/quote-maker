@@ -19,9 +19,7 @@ import {
   Upload,
 } from "lucide-react";
 import {
-  MATERIAL_EXTENSIONS,
   MATERIAL_FOLDERS,
-  PROGRAM_EXTENSIONS,
   fileExtension,
   formatBytes,
   sanitizeFolderName,
@@ -252,7 +250,7 @@ export function QuotePrograms({ quoteId }: { quoteId: string }) {
     const ok: File[] = [];
     const bad: string[] = [];
     for (const f of files) {
-      const invalid = validateProgramFile(f.name, f.size, dir);
+      const invalid = validateProgramFile(f.name, f.size);
       if (invalid) bad.push(`${f.name}: ${invalid}`);
       else ok.push(f);
     }
@@ -638,7 +636,6 @@ export function QuotePrograms({ quoteId }: { quoteId: string }) {
                 ref={fileInputRef}
                 type="file"
                 multiple={!!current}
-                accept={(current ? MATERIAL_EXTENSIONS : PROGRAM_EXTENSIONS).join(",")}
                 aria-label={`${currentTab.label}에 올릴 파일`}
                 onChange={(e) => pickFiles(Array.from(e.target.files ?? []), current)}
                 className="hidden"
@@ -665,7 +662,7 @@ export function QuotePrograms({ quoteId }: { quoteId: string }) {
                     {currentTab.label}에 파일 올리기
                   </span>
                   <span className="text-[11px] text-gray-500">
-                    {current ? "끌어다 놓아도 됩니다 · 파일당 500MB까지" : "zip, exe 등 설치 파일 · 500MB까지"}
+                    {current ? "끌어다 놓아도 됩니다 · 모든 형식 · 파일당 500MB까지" : "모든 형식 · 500MB까지"}
                   </span>
                   {current && !folder && (
                     <span className="text-[11px] text-gray-500">처음 올리면 NAS에 행사 폴더가 만들어집니다</span>
