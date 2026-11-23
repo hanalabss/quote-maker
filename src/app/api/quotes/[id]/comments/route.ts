@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db";
 import { getAuthUser } from "@/lib/auth";
 import { sendCommentNotification } from "@/lib/email";
 import { canAccessQuote, canSeeChannel, commentsInclude, type CommentChannel } from "@/lib/quoteAccess";
+import { DEV_LEAD_LABEL } from "@/lib/displayName";
 
 export async function GET(
   request: NextRequest,
@@ -119,7 +120,8 @@ export async function POST(
       quoteNumber: quote.quoteNumber,
       eventName: quote.eventName,
       quoteUrl,
-      authorName: user.name,
+      // 개발팀장 계정은 메일에 직함으로 (그 견적의 개발 담당이면 실명)
+      authorName: user.role === "dev" && quote.devAssigneeId !== user.id ? DEV_LEAD_LABEL : user.name,
       authorRole: user.role,
       authorEmail: user.email,
       content: comment.content,

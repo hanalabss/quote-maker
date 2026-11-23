@@ -42,6 +42,7 @@ import { RequestEditModal } from "@/components/RequestEditModal";
 import { CalendarColorPicker } from "@/components/quote/CalendarColorPicker";
 import { QuoteComments, type QuoteCommentType } from "@/components/quote/QuoteComments";
 import { QuotePrograms } from "@/components/quote/QuotePrograms";
+import { displayUserName } from "@/lib/displayName";
 
 interface QuoteItem {
   id: string;
@@ -146,7 +147,7 @@ function currentStepIndex(quote: QuoteDetail): number {
   }
 }
 
-function StatusStepper({ quote }: { quote: QuoteDetail }) {
+function StatusStepper({ quote, viewerRole }: { quote: QuoteDetail; viewerRole?: string }) {
   const idx = currentStepIndex(quote);
   if (idx === -1) {
     // 이탈/사전 상태: 배너로 표시
@@ -187,7 +188,8 @@ function StatusStepper({ quote }: { quote: QuoteDetail }) {
       case "pending":
         return fmtDate(quote.createdAt, true);
       case "reviewing":
-        return quote.reviewedBy?.name ? `검토: ${quote.reviewedBy.name}` : "";
+        // 검토자는 항상 dev 계정 — 사업팀에게는 "개발팀장"으로
+        return quote.reviewedBy?.name ? `검토: ${displayUserName({ name: quote.reviewedBy.name, role: "dev" }, viewerRole)}` : "";
       case "approved":
         return "";
       case "confirmed":
@@ -804,7 +806,7 @@ export default function QuoteDetailPage({
         </div>
       </div>
 
-      <StatusStepper quote={quote} />
+      <StatusStepper quote={quote} viewerRole={user?.role} />
 
       <div className="grid lg:grid-cols-3 gap-6">
         {/* 사이드: 행사/요청 정보 (모바일에서는 견적 항목 아래) */}
@@ -1296,7 +1298,7 @@ export default function QuoteDetailPage({
                         <option value="">미지정</option>
                         {devTeam.map((u) => (
                           <option key={u.id} value={u.id}>
-                            {u.role === "dev" && u.name !== "관리자" ? `${u.name} (관리자)` : u.name}
+                            {u.name}
                           </option>
                         ))}
                       </select>
@@ -1648,7 +1650,7 @@ export default function QuoteDetailPage({
             <p className="text-sm text-gray-600 mb-6">
               {isDev
                 ? "이 견적을 완전히 삭제합니다. 이 작업은 되돌릴 수 없습니다."
-                : "이 견적이 내 목록에서 숨겨집니다. 관리자는 계속 볼 수 있습니다."}
+                : "이 견적이 내 목록에서 숨겨집니다. 개발팀장은 계속 볼 수 있습니다."}
             </p>
             <div className="flex gap-2 justify-end">
               <button
