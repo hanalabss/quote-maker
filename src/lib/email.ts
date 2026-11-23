@@ -1,4 +1,5 @@
 import { pickCommentRecipients } from "@/lib/quoteAccess";
+import { DEV_LEAD_LABEL } from "@/lib/displayName";
 interface QuoteNotificationData {
   quoteNumber: string;
   eventName: string;
@@ -189,7 +190,7 @@ export async function sendCommentNotification(data: {
     return null;
   }
 
-  const roleLabel = data.authorRole === "dev" ? "개발팀" : data.authorRole === "dev_staff" ? "개발 담당" : "사업팀";
+  const roleLabel = data.authorRole === "dev" ? DEV_LEAD_LABEL : data.authorRole === "dev_staff" ? "개발 담당" : "사업팀";
   const channelLabel = data.channel === "dev" ? "개발" : "견적 협의";
   return sendEmail(
     recipients.join(","),
@@ -199,7 +200,7 @@ export async function sendCommentNotification(data: {
         { label: "견적번호", value: data.quoteNumber },
         { label: "행사명", value: data.eventName },
         { label: "채널", value: channelLabel },
-        { label: "작성자", value: `${data.authorName} (${roleLabel})` },
+        { label: "작성자", value: data.authorName === roleLabel ? roleLabel : `${data.authorName} (${roleLabel})` },
       ])}
       <div style="margin: 16px 0; padding: 12px 16px; background: #f8fafc; border-left: 3px solid #3b82f6; border-radius: 4px;">
         <div style="font-size: 14px; color: #374151; white-space: pre-wrap;">${data.content}</div>

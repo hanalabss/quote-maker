@@ -204,7 +204,7 @@ async function main() {
 
   // 기본 사용자 (비밀번호 bcrypt 해싱)
   const usersRaw = [
-    { loginId: "admin", password: "admin", name: "관리자", email: "dev@hanapf.kr", role: "dev", team: "개발팀", position: null },
+    { loginId: "admin", password: "admin", name: "장기훈", email: "dev@hanapf.kr", role: "dev", team: "개발팀", position: null },
     { loginId: "jdy", password: "1234", name: "정두용", email: "jdy@hanapf.kr", role: "sales", team: "사업팀", position: "팀장" },
     { loginId: "cmb", password: "1234", name: "채민병", email: "cmb@hanapf.kr", role: "sales", team: "사업팀", position: "대리" },
     { loginId: "kjn", password: "1234", name: "김정남", email: "kjn@hanapf.kr", role: "sales", team: "사업팀", position: "이사" },

@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { MessageCircle, Edit3, Trash2, Send, Loader2, CornerDownRight, Lock, ArrowRightLeft, UserCheck } from "lucide-react";
 import { looksLikePrice, visibleChannels, type CommentChannel } from "@/lib/quoteAccess";
+import { DEV_LEAD_LABEL, displayUserName } from "@/lib/displayName";
 
 export interface QuoteCommentType {
   id: string;
@@ -22,7 +23,7 @@ const CHANNEL_META: Record<CommentChannel, { label: string }> = {
 
 function roleBadge(role: string, isAssignee: boolean) {
   if (isAssignee) return { text: "개발 담당", cls: "bg-emerald-100 text-emerald-700", box: "bg-emerald-50/60 border-emerald-100" };
-  if (role === "dev") return { text: "관리자", cls: "bg-blue-100 text-blue-700", box: "bg-blue-50 border-blue-100" };
+  if (role === "dev") return { text: DEV_LEAD_LABEL, cls: "bg-blue-100 text-blue-700", box: "bg-blue-50 border-blue-100" };
   if (role === "dev_staff") return { text: "개발팀", cls: "bg-indigo-100 text-indigo-700", box: "bg-indigo-50 border-indigo-100" };
   return { text: "사업팀", cls: "bg-gray-200 text-gray-600", box: "bg-gray-50 border-gray-100" };
 }
@@ -141,7 +142,7 @@ export function QuoteComments({
     }
   }
 
-  // 관리자: 채널 이동 (개발 채널에 금액이 올라온 경우 등). 답글도 함께 이동
+  // 개발팀장: 채널 이동 (개발 채널에 금액이 올라온 경우 등). 답글도 함께 이동
   async function move(id: string, to: CommentChannel) {
     if (!confirm(`'${CHANNEL_META[to].label}' 채널로 옮길까요? 답글도 함께 옮겨집니다.`)) return;
     const res = await fetch(`/api/quotes/${quoteId}/comments/${id}`, {
@@ -156,13 +157,17 @@ export function QuoteComments({
   }
 
   function renderComment(c: QuoteCommentType, isReply: boolean) {
-    const b = roleBadge(c.user.role, !!assignee && c.userId === assignee.id);
+    const isAssignee = !!assignee && c.userId === assignee.id;
+    const b = roleBadge(c.user.role, isAssignee);
+    const authorName = displayUserName(c.user, role, isAssignee);
+    // 이름 자리에 이미 "개발팀장"이 나오면 같은 글자의 배지는 생략
+    const showBadge = authorName !== b.text;
     const mine = c.userId === userId;
     return (
       <div key={c.id} className={`p-2.5 sm:p-3 rounded-lg border ${b.box}`}>
         <div className="flex items-center gap-x-2 gap-y-1 mb-1 flex-wrap">
-          <span className="text-sm font-medium">{c.user.name}</span>
-          <span className={`text-xs px-1.5 py-0.5 rounded ${b.cls}`}>{b.text}</span>
+          <span className="text-sm font-medium">{authorName}</span>
+          {showBadge && <span className={`text-xs px-1.5 py-0.5 rounded ${b.cls}`}>{b.text}</span>}
           <span className="text-xs text-gray-400">
             {fmt(c.createdAt)}
             {new Date(c.updatedAt).getTime() - new Date(c.createdAt).getTime() > 2000 && " (수정됨)"}
@@ -300,12 +305,12 @@ export function QuoteComments({
                 </>
               )
             ) : (
-              <>개발 담당자 지정 전입니다. 댓글은 관리자에게 전달됩니다. 금액은 적지 마세요.</>
+              <>개발 담당자 지정 전입니다. 댓글은 {DEV_LEAD_LABEL}에게 전달됩니다. 금액은 적지 마세요.</>
             )}
           </p>
         </div>
       ) : (
-        <p className="text-xs text-gray-500 mb-3">금액·견적 문의는 관리자에게 전달됩니다. 개발 담당자는 볼 수 없습니다.</p>
+        <p className="text-xs text-gray-500 mb-3">금액·견적 문의는 {DEV_LEAD_LABEL}에게 전달됩니다. 개발 담당자는 볼 수 없습니다.</p>
       )}
 
       {roots.length > 0 ? (
@@ -326,7 +331,7 @@ export function QuoteComments({
                       <textarea
                         value={replyText}
                         onChange={(e) => setReplyText(e.target.value)}
-                        placeholder={`${c.user.name}님에게 답글...`}
+                        placeholder={`${displayUserName(c.user, role, !!assignee && c.userId === assignee.id)}님에게 답글...`}
                         rows={2}
                         autoFocus
                         className="flex-1 px-3 py-2 border rounded-lg text-base sm:text-sm focus:ring-2 focus:ring-blue-500 outline-none resize-none"
