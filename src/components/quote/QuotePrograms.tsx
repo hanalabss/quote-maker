@@ -313,7 +313,9 @@ export function QuotePrograms({ quoteId }: { quoteId: string }) {
   };
 
   // 고른 파일 검사 — 하나라도 올릴 수 없으면 무엇이 왜 안 되는지 알려 주고 나머지만 남긴다
+  // 디자인·기타 자료는 고르거나 끌어다 놓는 즉시 올린다. 완료 프로그램은 버전·메모를 적을 수 있게 칸을 먼저 연다.
   const pickFiles = (list: File[], dir: UploadDir) => {
+    if (progress || !list.length) return;
     setError(null);
     const files = dir ? list : list.slice(0, 1);
     const ok: File[] = [];
@@ -327,6 +329,8 @@ export function QuotePrograms({ quoteId }: { quoteId: string }) {
     setPicked(ok);
     if (ok.length) setFormOpen(true);
     if (fileInputRef.current) fileInputRef.current.value = "";
+    // 올릴 수 없는 파일이 섞여 있었으면 그 안내는 지우지 않고 나머지를 올린다
+    if (dir && ok.length) void upload(dir, ok, bad.length > 0);
   };
 
   const uploadOne = async (file: File, dir: UploadDir, index: number, count: number) => {
@@ -421,14 +425,14 @@ export function QuotePrograms({ quoteId }: { quoteId: string }) {
     }
   };
 
-  const upload = async (dir: UploadDir) => {
-    if (!picked.length || progress) return;
-    setError(null);
+  const upload = async (dir: UploadDir, files: File[] = picked, keepError = false) => {
+    if (!files.length || progress) return;
+    if (!keepError) setError(null);
     let sent = 0;
     let failure: string | null = null;
     try {
-      for (const file of picked) {
-        await uploadOne(file, dir, sent + 1, picked.length);
+      for (const file of files) {
+        await uploadOne(file, dir, sent + 1, files.length);
         sent++;
       }
     } catch (e) {
@@ -439,8 +443,8 @@ export function QuotePrograms({ quoteId }: { quoteId: string }) {
     setProgress(null);
     if (failure === null) return resetForm();
     // 앞의 파일은 이미 올라갔다 — 남은 것만 다시 올릴 수 있게 둔다
-    setError(picked.length > 1 ? `${picked[sent].name}: ${failure}${sent ? ` (앞의 ${sent}개는 올라갔습니다)` : ""}` : failure);
-    setPicked(picked.slice(sent));
+    setError(files.length > 1 ? `${files[sent].name}: ${failure}${sent ? ` (앞의 ${sent}개는 올라갔습니다)` : ""}` : failure);
+    setPicked(files.slice(sent));
   };
 
   const remove = async (f: NasFile, dir: UploadDir) => {
@@ -504,8 +508,32 @@ export function QuotePrograms({ quoteId }: { quoteId: string }) {
   const nasFill = !progress ? 0 : progress.stage === "nas" ? progress.percent : progress.stage === "verify" || progress.stage === "share" ? 100 : 0;
   const fileHref = (name: string) => `${api}/file?name=${encodeURIComponent(name)}&dir=${encodeURIComponent(current)}`;
 
+  // 끌어다 놓는 자리는 패널 전체 — 올리기 버튼을 정확히 겨냥하지 않아도 된다
+  const droppable = canUploadHere && !progress && !picking;
+  const dropProps = droppable
+    ? {
+        onDragOver: (e: React.DragEvent) => {
+          if (!e.dataTransfer.types.includes("Files")) return;
+          e.preventDefault();
+          setDragging(true);
+        },
+        onDragLeave: (e: React.DragEvent) => {
+          if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setDragging(false);
+        },
+        onDrop: (e: React.DragEvent) => {
+          e.preventDefault();
+          setDragging(false);
+          pickFiles(Array.from(e.dataTransfer.files), current);
+        },
+      }
+    : {};
+
   return (
-    <section className="bg-white rounded-xl border p-5" aria-label="행사 자료">
+    <section
+      className={`bg-white rounded-xl border p-5 ${dragging && droppable ? "border-blue-500 ring-2 ring-blue-200" : ""}`}
+      aria-label="행사 자료"
+      {...dropProps}
+    >
       <div className="flex items-center justify-between mb-3">
         <h3 className="font-medium flex items-center gap-1.5">
           <FolderOpen className="w-4 h-4" />
@@ -755,16 +783,6 @@ export function QuotePrograms({ quoteId }: { quoteId: string }) {
               {!formOpen ? (
                 <button
                   onClick={() => fileInputRef.current?.click()}
-                  onDragOver={(e) => {
-                    e.preventDefault();
-                    setDragging(true);
-                  }}
-                  onDragLeave={() => setDragging(false)}
-                  onDrop={(e) => {
-                    e.preventDefault();
-                    setDragging(false);
-                    pickFiles(Array.from(e.dataTransfer.files), current);
-                  }}
                   className={`w-full flex flex-col items-center justify-center gap-0.5 text-xs py-2.5 rounded-lg border border-dashed focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-500 ${
                     dragging ? "border-blue-500 bg-blue-50 text-blue-700" : "border-gray-300 text-gray-700 hover:border-blue-500 hover:text-blue-700"
                   }`}
@@ -774,7 +792,7 @@ export function QuotePrograms({ quoteId }: { quoteId: string }) {
                     {currentTab.label}에 파일 올리기
                   </span>
                   <span className="text-[11px] text-gray-500">
-                    {current ? "끌어다 놓아도 됩니다 · 모든 형식 · 파일당 500MB까지" : "모든 형식 · 500MB까지"}
+                    {current ? "끌어다 놓으면 바로 올라갑니다 · 모든 형식 · 파일당 500MB까지" : "끌어다 놓아도 됩니다 · 모든 형식 · 500MB까지"}
                   </span>
                   {current && !folder && (
                     <span className="text-[11px] text-gray-500">처음 올리면 NAS에 행사 폴더가 만들어집니다</span>
@@ -796,8 +814,9 @@ export function QuotePrograms({ quoteId }: { quoteId: string }) {
                       );
                     })}
                   </ul>
+                  {/* 버전·메모는 완료 프로그램만 — 자료는 바로 올리므로 적는 칸을 두지 않는다 */}
+                  {!current && (
                   <div className="grid grid-cols-5 gap-1.5">
-                    {!current && (
                       <input
                         value={version}
                         onChange={(e) => setVersion(e.target.value)}
@@ -807,17 +826,17 @@ export function QuotePrograms({ quoteId }: { quoteId: string }) {
                         aria-label="버전"
                         className="col-span-2 min-w-0 text-xs border border-gray-200 rounded px-2 py-1.5 focus:outline-none focus:border-blue-500"
                       />
-                    )}
                     <input
                       value={note}
                       onChange={(e) => setNote(e.target.value)}
                       disabled={!!progress}
                       maxLength={300}
-                      placeholder={current ? "메모 (선택) 예: 2차 수정 시안" : "메모 (선택)"}
+                      placeholder="메모 (선택)"
                       aria-label="메모"
-                      className={`${current ? "col-span-5" : "col-span-3"} min-w-0 text-xs border border-gray-200 rounded px-2 py-1.5 focus:outline-none focus:border-blue-500`}
+                      className="col-span-3 min-w-0 text-xs border border-gray-200 rounded px-2 py-1.5 focus:outline-none focus:border-blue-500"
                     />
                   </div>
+                  )}
 
                   {progress ? (
                     <div className="space-y-1.5" role="status" aria-live="polite">
@@ -857,7 +876,7 @@ export function QuotePrograms({ quoteId }: { quoteId: string }) {
                         className="inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-md bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-40 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500"
                       >
                         <Upload className="w-3.5 h-3.5" />
-                        {picked.length > 1 ? `${picked.length}개 올리기` : "올리기"}
+                        {current ? "다시 올리기" : "올리기"}
                       </button>
                     </div>
                   )}
