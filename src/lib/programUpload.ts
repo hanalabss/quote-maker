@@ -7,6 +7,11 @@
 export const PROGRAM_PART_SIZE = 8 * 1024 * 1024; // 조각 크기 8MB
 export const PROGRAM_MAX_SIZE = 500 * 1024 * 1024; // 파일 하나 500MB
 export const PROGRAM_TMP_PREFIX = "program-tmp";
+// 이 크기 이하는 임시 보관(싱가포르)을 거치지 않고 서버로 한 번에 보내 바로 NAS에 넣는다.
+// Vercel 요청 본문 제한(4.5MB)보다 조금 작게 잡는다. 그래도 서버가 너무 크다고(413) 하면 화면이 조각 방식으로 다시 올린다.
+export const PROGRAM_DIRECT_MAX = Math.floor(4.3 * 1024 * 1024);
+// 조각을 동시에 몇 개씩 보낼지
+export const PROGRAM_PART_PARALLEL = 3;
 // 보관 위치: NAS [행사 자료] 아래 행사 폴더 — 견적마다 행사 폴더 하나를 연결한다.
 // 목록의 기준은 NAS 폴더의 실제 내용이다 (NAS에 직접 넣은 파일도 웹에 보인다).
 export const DEFAULT_NAS_BASE_DIR = "/공유폴더/①프로그램 개발/개발팀/[행사 자료]";

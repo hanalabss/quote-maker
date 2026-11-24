@@ -234,11 +234,19 @@ test("세션이 끊기면 한 번만 다시 로그인해 처음부터 다시 한
   const s = await lib();
   const B = "/공유폴더/①프로그램 개발/개발팀/[행사 자료]";
 
+  // 세션은 서버 인스턴스에서 같이 쓴다 — 처음 한 번만 로그인하고, 이어지는 호출은 로그인하지 않는다
+  logins = 0;
+  await s.withSession((sid) => s.listFolder(sid, B + "/있는 폴더"));
+  await s.withSession((sid) => s.listFolder(sid, B + "/있는 폴더"));
+  assert.equal(logins, 1, "두 번째 호출은 같은 세션을 쓴다");
+  assert.equal(seen.filter((r) => r.body.toString("utf8").includes("method=logout")).length, 0, "로그아웃하지 않는다");
+
+  // 세션이 끊겼다고 하면 버리고 새로 로그인해 다시 한다
   dropSessions = 1;
   logins = 0;
   const list = await s.withSession((sid) => s.listFolder(sid, B + "/있는 폴더"));
   assert.equal(list?.length, 2);
-  assert.equal(logins, 2, "새로 로그인해서 다시 했다");
+  assert.equal(logins, 1, "끊긴 세션을 버리고 새로 로그인해서 다시 했다");
 
   // 두 번 연속 끊기면 더 하지 않고 오류를 그대로 낸다
   dropSessions = 2;
@@ -247,11 +255,21 @@ test("세션이 끊기면 한 번만 다시 로그인해 처음부터 다시 한
     s.withSession((sid) => s.listFolder(sid, B + "/있는 폴더")),
     (e: Error & { code?: number }) => e.code === 119,
   );
-  assert.equal(logins, 2);
+  assert.equal(logins, 1, "이미 있던 세션으로 한 번, 새로 로그인해 한 번");
   assert.equal(dropSessions, 0);
 
-  // 세션과 무관한 오류는 다시 하지 않는다
+  // 끊긴 세션은 버려졌으므로 다음 호출은 새로 로그인한다
+  logins = 0;
+  const [a, b] = await Promise.all([
+    s.withSession((sid) => s.listFolder(sid, B + "/있는 폴더")),
+    s.withSession((sid) => s.listFolder(sid, B + "/있는 폴더")),
+  ]);
+  assert.equal(a?.length, 2);
+  assert.equal(b?.length, 2);
+  assert.equal(logins, 1, "동시에 들어와도 로그인은 한 번");
+
+  // 세션과 무관한 오류는 다시 하지 않는다 (세션도 그대로 둔다)
   logins = 0;
   await assert.rejects(s.withSession(async () => { throw new s.SynologyError("다른 오류", 414); }), /다른 오류/);
-  assert.equal(logins, 1);
+  assert.equal(logins, 0);
 });

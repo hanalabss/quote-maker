@@ -43,14 +43,22 @@ export async function programContext(
   id: string,
   opts: { manage?: boolean; nas?: boolean } = {},
 ): Promise<{ user: AuthUser; quote: ProgramQuote } | NextResponse> {
-  const user = await getAuthUser();
+  // 이 API는 서울에서 돌고 DB는 싱가포르라 조회 한 번이 0.3초 안팎이다 (2026-11-24 실측).
+  // 세 조회를 차례로 하지 않고 한꺼번에 보낸 뒤, 권한은 결과를 다 받고 나서 순서대로 확인한다.
+  const [user, q, link] = await Promise.all([
+    getAuthUser(),
+    prisma.quote.findUnique({
+      where: { id },
+      select: { id: true, quoteNumber: true, eventName: true, status: true, isExternal: true, createdById: true, devAssigneeId: true },
+    }),
+    prisma.quoteProgram.findFirst({
+      where: { quoteId: id, size: FOLDER_LINK },
+      orderBy: { createdAt: "desc" },
+      select: { fileName: true, shareId: true, shareUrl: true },
+    }),
+  ]);
   if (!user) return fail("로그인이 필요합니다", 401);
   if (opts.manage && !canUploadProgram(user.role)) return fail("권한이 없습니다", 403);
-
-  const q = await prisma.quote.findUnique({
-    where: { id },
-    select: { id: true, quoteNumber: true, eventName: true, status: true, isExternal: true, createdById: true, devAssigneeId: true },
-  });
   if (!q) return fail("견적을 찾을 수 없습니다", 404);
   if (!canAccessQuote(user, q)) return fail("권한이 없습니다", 403);
 
@@ -58,11 +66,6 @@ export async function programContext(
     return fail("NAS 연동이 아직 설정되지 않았습니다 (서버 환경변수 SYNOLOGY_URL·USER·PASSWORD)", 503);
   }
 
-  const link = await prisma.quoteProgram.findFirst({
-    where: { quoteId: id, size: FOLDER_LINK },
-    orderBy: { createdAt: "desc" },
-    select: { fileName: true, shareId: true, shareUrl: true },
-  });
   return {
     user,
     quote: {
