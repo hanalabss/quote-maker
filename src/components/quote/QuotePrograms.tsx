@@ -20,6 +20,8 @@ import {
 } from "lucide-react";
 import {
   MATERIAL_FOLDERS,
+  PROGRAM_DIRECT_MAX,
+  PROGRAM_PART_PARALLEL,
   fileExtension,
   formatBytes,
   sanitizeFolderName,
@@ -109,6 +111,64 @@ async function putPartWithRetry(url: string, blob: Blob, onProgress: (loaded: nu
   throw lastError;
 }
 
+// 작은 파일 한 번에 올리기 — 본문이 곧 파일. 서버가 너무 크다고(413) 하면 "too-large" 를 돌려줘 조각 방식으로 넘어가게 한다.
+function postDirect(url: string, file: File, onSent: (loaded: number) => void, onSentAll: () => void): Promise<"ok" | "too-large"> {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open("POST", url);
+    xhr.setRequestHeader("Content-Type", "application/octet-stream");
+    xhr.upload.onprogress = (e) => onSent(e.loaded);
+    xhr.upload.onload = onSentAll;
+    xhr.onload = () => {
+      if (xhr.status >= 200 && xhr.status < 300) return resolve("ok");
+      if (xhr.status === 413) return resolve("too-large");
+      let message = "NAS에 올리지 못했습니다";
+      try {
+        message = JSON.parse(xhr.responseText).error || message;
+      } catch {
+        // 본문이 JSON 이 아니면 기본 문구
+      }
+      reject(new Error(message));
+    };
+    xhr.onerror = () => reject(new Error("보내는 중 연결이 끊겼습니다. 다시 시도해 주세요"));
+    xhr.send(file);
+  });
+}
+
+// 직전에 본 목록 — 다시 들어왔을 때 NAS 응답을 기다리지 않고 먼저 보여 준다 (곧바로 새로 읽어 바꾼다). 탭을 닫으면 사라진다.
+const cacheKey = (quoteId: string) => `quote-programs:${quoteId}`;
+function readCached(quoteId: string): ProgramState | null {
+  try {
+    const raw = sessionStorage.getItem(cacheKey(quoteId));
+    return raw ? (JSON.parse(raw) as ProgramState) : null;
+  } catch {
+    return null;
+  }
+}
+function writeCached(quoteId: string, state: ProgramState) {
+  try {
+    sessionStorage.setItem(cacheKey(quoteId), JSON.stringify(state));
+  } catch {
+    // 저장 공간이 없거나 막혀 있으면 건너뛴다
+  }
+}
+
+// 견적 상세 화면은 견적을 다 읽은 뒤에야 이 패널을 그린다. 그때부터 NAS 목록을 읽기 시작하면 두 요청이 줄을 서므로,
+// 화면이 열리자마자 목록 요청을 먼저 보내 두고(prefetchPrograms) 패널은 그 응답을 이어받는다.
+const prefetched = new Map<string, Promise<Response>>();
+const programsUrl = (quoteId: string) => `/api/quotes/${quoteId}/programs`;
+export function prefetchPrograms(quoteId: string) {
+  if (prefetched.has(quoteId)) return;
+  const p = fetch(programsUrl(quoteId), { cache: "no-store" });
+  p.catch(() => {}); // 실패는 패널이 이어받을 때 다룬다
+  prefetched.set(quoteId, p);
+}
+function fetchPrograms(quoteId: string): Promise<Response> {
+  const early = prefetched.get(quoteId);
+  prefetched.delete(quoteId); // 한 번만 쓴다 — 새로 고침은 항상 새로 읽는다
+  return early ?? fetch(programsUrl(quoteId), { cache: "no-store" });
+}
+
 // 올해 것은 월·일만, 지난 해 것은 연도까지
 const fmtDate = (ms: number) => {
   if (!ms) return "";
@@ -164,16 +224,25 @@ export function QuotePrograms({ quoteId }: { quoteId: string }) {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch(api, { cache: "no-store" });
-      if (res.ok) setState(await res.json());
+      const res = await fetchPrograms(quoteId);
+      if (res.ok) {
+        const next = (await res.json()) as ProgramState;
+        setState(next);
+        if (!next.nasError) writeCached(quoteId, next);
+      }
+    } catch {
+      // 네트워크 오류 — 이전 목록을 그대로 둔다 (새로 고침으로 다시 시도)
     } finally {
       setLoading(false);
     }
-  }, [api]);
+  }, [quoteId]);
 
   useEffect(() => {
+    // 직전에 본 목록이 있으면 먼저 보여 주고, NAS에서 새로 읽어 바꾼다
+    const cached = readCached(quoteId);
+    if (cached) setState(cached);
     load();
-  }, [load]);
+  }, [load, quoteId]);
 
   // 올리는 도중 창을 닫으면 처음부터 다시 해야 하므로 한 번 물어본다
   useEffect(() => {
@@ -264,6 +333,19 @@ export function QuotePrograms({ quoteId }: { quoteId: string }) {
     const at = { index, count, name: file.name };
     setProgress({ ...at, stage: "upload", percent: 0 });
 
+    // 작은 파일은 한 번에 보내 바로 NAS에 넣는다 (임시 보관을 거치는 조각 방식보다 훨씬 빠르다)
+    if (file.size <= PROGRAM_DIRECT_MAX) {
+      const qs = new URLSearchParams({ name: file.name, dir, version, note });
+      const result = await postDirect(
+        `${api}/direct?${qs}`,
+        file,
+        (loaded) => setProgress({ ...at, stage: "upload", percent: Math.floor((loaded / file.size) * 100) }),
+        () => setProgress({ ...at, stage: "nas", percent: 0 }),
+      );
+      if (result === "ok") return;
+      setProgress({ ...at, stage: "upload", percent: 0 });
+    }
+
     // 1) 조각별 임시 주소 받기 (연결된 행사 폴더가 없으면 이때 만들어진다)
     const initRes = await fetch(`${api}/init`, {
       method: "POST",
@@ -273,17 +355,32 @@ export function QuotePrograms({ quoteId }: { quoteId: string }) {
     const init = await initRes.json().catch(() => ({}));
     if (!initRes.ok) throw new Error(init.error || "올리기를 시작하지 못했습니다");
 
-    // 2) 조각 올리기
+    // 2) 조각 올리기 — PROGRAM_PART_PARALLEL 개씩 동시에 보낸다
     const partSize: number = init.partSize;
-    let done = 0;
-    for (const part of init.parts as { index: number; url: string }[]) {
-      const blob = file.slice(part.index * partSize, (part.index + 1) * partSize);
-      await putPartWithRetry(part.url, blob, (loadedBytes) => {
-        setProgress({ ...at, stage: "upload", percent: Math.floor(((done + loadedBytes) / file.size) * 100) });
-      }).catch(() => {
-        throw new Error("보내는 중 연결이 끊겼습니다. 다시 시도해 주세요");
-      });
-      done += blob.size;
+    const queue = [...(init.parts as { index: number; url: string }[])];
+    const loadedByPart = new Map<number, number>();
+    const report = () => {
+      let sum = 0;
+      loadedByPart.forEach((n) => (sum += n));
+      setProgress({ ...at, stage: "upload", percent: Math.min(100, Math.floor((sum / file.size) * 100)) });
+    };
+    const sendParts = async () => {
+      for (let part = queue.shift(); part; part = queue.shift()) {
+        const { index, url } = part;
+        const blob = file.slice(index * partSize, (index + 1) * partSize);
+        await putPartWithRetry(url, blob, (loadedBytes) => {
+          loadedByPart.set(index, loadedBytes);
+          report();
+        });
+        loadedByPart.set(index, blob.size);
+        report();
+      }
+    };
+    try {
+      await Promise.all(Array.from({ length: Math.min(PROGRAM_PART_PARALLEL, queue.length) }, sendParts));
+    } catch {
+      queue.length = 0; // 하나가 실패하면 남은 조각은 보내지 않는다
+      throw new Error("보내는 중 연결이 끊겼습니다. 다시 시도해 주세요");
     }
 
     // 3) 서버가 NAS로 옮기는 동안 진행 상황을 줄 단위로 받는다
@@ -367,7 +464,22 @@ export function QuotePrograms({ quoteId }: { quoteId: string }) {
     return (folders ?? []).filter((f) => !q || f.name.toLowerCase().includes(q));
   }, [folders, filter]);
 
-  if (!state) return null;
+  // 첫 응답 전에도 자리를 비워 두지 않는다 — 읽는 중임을 바로 보여 준다
+  if (!state) {
+    if (!loading) return null;
+    return (
+      <section className="bg-white rounded-xl border p-5" aria-label="행사 자료" aria-busy="true">
+        <h3 className="font-medium flex items-center gap-1.5 mb-3">
+          <FolderOpen className="w-4 h-4" />
+          행사 자료
+        </h3>
+        <p className="flex items-center gap-1.5 text-xs text-gray-500" role="status">
+          <Loader2 className="w-3.5 h-3.5 animate-spin motion-reduce:animate-none" />
+          NAS 폴더 읽는 중
+        </p>
+      </section>
+    );
+  }
   const { canManage, canUploadMaterial, configured, folder } = state;
 
   const filesOf = (dir: UploadDir) => (dir ? (state.materials.find((m) => m.dir === dir)?.files ?? []) : state.files);

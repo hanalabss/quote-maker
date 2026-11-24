@@ -155,23 +155,44 @@ export async function logout(sid: string): Promise<void> {
   }
 }
 
+// 서버 인스턴스가 살아 있는 동안 NAS 세션 하나를 같이 쓴다.
+// 호출마다 로그인·로그아웃하면 목록 한 번(약 20ms)을 읽으려고 0.5~1초를 더 쓴다 (2026-11-24 실측: 로그인 370~980ms, 로그아웃 90ms).
+// 세션은 로그아웃하지 않고 둔다 — 오래 쓰지 않으면 NAS가 알아서 만료시키고, 그때는 withSession 이 다시 로그인한다.
+let sharedSid: string | null = null;
+let pendingLogin: Promise<string> | null = null;
+
+async function sharedSession(): Promise<string> {
+  if (sharedSid) return sharedSid;
+  // 동시에 들어온 요청이 각자 로그인하지 않게 진행 중인 로그인을 같이 기다린다
+  pendingLogin ??= login()
+    .then((sid) => (sharedSid = sid))
+    .finally(() => {
+      pendingLogin = null;
+    });
+  return pendingLogin;
+}
+
+function dropSession(sid: string) {
+  if (sharedSid === sid) sharedSid = null;
+}
+
 /**
- * 로그인 → 작업 → 로그아웃.
- * 작업 도중 NAS가 세션을 잃었다고 답하면(106 만료 · 119 세션 없음) 한 번만 새로 로그인해 처음부터 다시 한다.
- * 2026-11-11 로컬에서 목록 조회 중 119 가 한 번 났다(동시 호출·새로 고침으로는 재현되지 않아 원인 미확정).
- * 여기에 넘기는 작업은 다시 해도 결과가 같은 것(목록·링크·삭제·폴더 만들기)이어야 한다. 파일 올리기는 이 함수를 쓰지 않는다.
+ * 같이 쓰는 NAS 세션으로 작업한다.
+ * NAS가 세션을 잃었다고 답하면(106 만료 · 119 세션 없음) 한 번만 새로 로그인해 처음부터 다시 한다.
+ * 여기에 넘기는 작업은 다시 해도 결과가 같은 것(목록·링크·삭제·폴더 만들기)이어야 한다.
+ * 파일 올리기는 이 안에서 하지 않는다 — 먼저 여기서 확인 호출로 세션이 살아 있는지 본 뒤, 돌려받은 sid 로 올린다.
  */
 export async function withSession<T>(fn: (sid: string) => Promise<T>): Promise<T> {
   for (let attempt = 0; ; attempt++) {
-    const sid = await login();
+    const sid = await sharedSession();
     try {
       return await fn(sid);
     } catch (e) {
       const sessionLost = e instanceof SynologyError && (e.code === 106 || e.code === 119);
-      if (!sessionLost || attempt > 0) throw e;
+      if (!sessionLost) throw e;
+      dropSession(sid);
+      if (attempt > 0) throw e;
       console.error(`NAS 세션이 끊겨 다시 로그인합니다 (코드 ${e.code})`);
-    } finally {
-      await logout(sid);
     }
   }
 }

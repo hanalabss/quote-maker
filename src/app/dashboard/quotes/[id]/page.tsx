@@ -41,7 +41,7 @@ import { getLifecycleBadge, todayStr } from "@/lib/lifecycle";
 import { RequestEditModal } from "@/components/RequestEditModal";
 import { CalendarColorPicker } from "@/components/quote/CalendarColorPicker";
 import { QuoteComments, type QuoteCommentType } from "@/components/quote/QuoteComments";
-import { QuotePrograms } from "@/components/quote/QuotePrograms";
+import { QuotePrograms, prefetchPrograms } from "@/components/quote/QuotePrograms";
 import { displayUserName } from "@/lib/displayName";
 
 interface QuoteItem {
@@ -397,6 +397,8 @@ export default function QuoteDetailPage({
   const router = useRouter();
 
   useEffect(() => {
+    // 행사 자료(NAS 목록)는 견적을 읽는 동안 같이 읽기 시작한다 — 패널이 그려질 때 응답을 이어받는다
+    prefetchPrograms(id);
     fetch(`/api/quotes/${id}`)
       .then((r) => r.json())
       .then((data) => {

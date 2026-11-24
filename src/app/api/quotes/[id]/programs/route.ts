@@ -35,30 +35,29 @@ export async function GET(
 
   const folderPath = eventFolderPath(quote.programFolder);
   try {
-    const listed = await withSession(async (sid) => {
-      const root = await listFolder(sid, folderPath);
-      if (root === null) return null;
-      const subs: Record<string, NasEntry[]> = {};
-      for (const dir of MATERIAL_FOLDERS) {
-        // 자료 폴더는 처음 올릴 때 생긴다 — 아직 없으면 빈 목록
-        subs[dir] = root.some((e) => e.isDir && e.name === dir) ? ((await listFolder(sid, `${folderPath}/${dir}`)) ?? []) : [];
-      }
-      return { root, subs };
-    });
+    // NAS 목록과 DB 기록을 동시에 읽는다 (DB 조회가 NAS 목록을 기다리지 않게, 기록은 폴더 경로로 찾는다)
+    const [listed, rows] = await Promise.all([
+      withSession(async (sid) => {
+        // 자료 폴더는 처음 올릴 때 생긴다 — 아직 없으면(408) 빈 목록
+        const [root, ...subLists] = await Promise.all([
+          listFolder(sid, folderPath),
+          ...MATERIAL_FOLDERS.map((dir) => listFolder(sid, `${folderPath}/${dir}`)),
+        ]);
+        if (root === null) return null;
+        const subs: Record<string, NasEntry[]> = {};
+        MATERIAL_FOLDERS.forEach((dir, i) => (subs[dir] = subLists[i] ?? []));
+        return { root, subs };
+      }),
+      // 웹에서 올린 파일의 버전·메모·올린 사람 (같은 폴더를 쓰는 다른 견적에서 올린 것도 포함)
+      prisma.quoteProgram.findMany({
+        where: { nasPath: { startsWith: `${folderPath}/` }, ...FILE_ROWS, uploadedById: { not: null } },
+        orderBy: { createdAt: "desc" },
+        select: { nasPath: true, version: true, note: true, uploadedById: true, uploadedBy: { select: { name: true } } },
+      }),
+    ]);
     if (listed === null) return NextResponse.json({ ...base, folderMissing: true });
 
     const pathOf = (dir: string, name: string) => (dir ? `${folderPath}/${dir}/${name}` : `${folderPath}/${name}`);
-    const allPaths = [
-      ...listed.root.filter((e) => !e.isDir).map((e) => pathOf("", e.name)),
-      ...MATERIAL_FOLDERS.flatMap((dir) => listed.subs[dir].filter((e) => !e.isDir).map((e) => pathOf(dir, e.name))),
-    ];
-
-    // 웹에서 올린 파일의 버전·메모·올린 사람 (같은 폴더를 쓰는 다른 견적에서 올린 것도 포함)
-    const rows = await prisma.quoteProgram.findMany({
-      where: { nasPath: { in: allPaths }, ...FILE_ROWS, uploadedById: { not: null } },
-      orderBy: { createdAt: "desc" },
-      select: { nasPath: true, version: true, note: true, uploadedById: true, uploadedBy: { select: { name: true } } },
-    });
     const byPath = new Map<string, (typeof rows)[number]>();
     for (const r of rows) if (!byPath.has(r.nasPath)) byPath.set(r.nasPath, r);
 

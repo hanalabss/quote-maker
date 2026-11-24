@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest, NextResponse, after } from "next/server";
 import { randomUUID } from "crypto";
 import { supabase, STORAGE_BUCKET } from "@/lib/supabase";
 import { ensureEventFolder, fail, nasFail, programContext } from "@/lib/programAccess";
@@ -64,14 +64,17 @@ export async function POST(
     }
   }
 
-  await cleanupStale(id);
+  // 오래된 조각 정리는 응답을 보낸 뒤에 한다
+  after(() => cleanupStale(id));
 
   const uploadId = randomUUID();
-  const count = partCount(size);
   const bucket = supabase.storage.from(STORAGE_BUCKET);
+  // 조각 주소는 한꺼번에 만든다 (하나씩 만들면 조각 수만큼 싱가포르를 왕복한다)
+  const signed = await Promise.all(
+    Array.from({ length: partCount(size) }, (_, i) => bucket.createSignedUploadUrl(tmpPartPath(id, uploadId, i))),
+  );
   const parts: { index: number; url: string }[] = [];
-  for (let i = 0; i < count; i++) {
-    const { data, error } = await bucket.createSignedUploadUrl(tmpPartPath(id, uploadId, i));
+  for (const [i, { data, error }] of signed.entries()) {
     if (error || !data?.signedUrl) {
       console.error("임시 업로드 주소 생성 실패:", error?.message);
       return fail("올리기를 시작하지 못했습니다", 500);
